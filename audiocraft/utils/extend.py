@@ -67,7 +67,7 @@ def generate_music_segments(text, melody, MODEL, duration:int=10, segment_durati
         # Append the generated output to the list of segments
         #output_segments.append(output[:, :segment_duration])
         output_segments.append(output)
-        print(f"output_segments: {len(output_segments)}: shape[0]: {output.shape} dim {output.dim()}")
+        print(f"output_segments: {len(output_segments)}: shape: {output.shape} dim {output.dim()}")
     return output_segments
 
 #def generate_music_segments(text, melody, duration, MODEL, segment_duration=30):

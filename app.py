@@ -67,9 +67,9 @@ def predict(model, text, melody, duration, topk, topp, temperature, cfg_coef):
         try:
             # Combine the output segments into one long audio file
             output_segments = [segment.detach().cpu().float()[0] for segment in output_segments]
-            output = torch.cat(output_segments, dim=2)
+            output = torch.cat(output_segments, dim=1)
         except Exception as e:
-            print(f"error combining segments: {e}. Using first segment only")
+            print(f"Error combining segments: {e}. Using the first segment only.")
             output = output_segments[0].detach().cpu().float()[0]
     else:
         output = output.detach().cpu().float()[0]
