@@ -25,7 +25,7 @@ def load_model(version):
     return MusicGen.get_pretrained(version)
 
 
-def predict(model, text, melody, duration, topk, topp, temperature, cfg_coef):
+def predict(model, text, melody, duration, dimension, topk, topp, temperature, cfg_coef):
     global MODEL
     topk = int(topk)
     if MODEL is None or MODEL.name != model:
@@ -67,7 +67,7 @@ def predict(model, text, melody, duration, topk, topp, temperature, cfg_coef):
         try:
             # Combine the output segments into one long audio file
             output_segments = [segment.detach().cpu().float()[0] for segment in output_segments]
-            output = torch.cat(output_segments, dim=1)
+            output = torch.cat(output_segments, dim=dimension)
         except Exception as e:
             print(f"Error combining segments: {e}. Using the first segment only.")
             output = output_segments[0].detach().cpu().float()[0]
@@ -109,6 +109,7 @@ def ui(**kwargs):
                     model = gr.Radio(["melody", "medium", "small", "large"], label="Model", value="melody", interactive=True)
                 with gr.Row():
                     duration = gr.Slider(minimum=1, maximum=1000, value=10, label="Duration", interactive=True)
+                    dimension = gr.Slider(minimum=-2, maximum=1, value=1, step=1, label="Dimension", info="determines which direction to add new segements of audio. (0 = stack tracks, 1 = lengthen, -1 = ?)", interactive=True)
                 with gr.Row():
                     topk = gr.Number(label="Top-k", value=250, interactive=True)
                     topp = gr.Number(label="Top-p", value=0, interactive=True)
@@ -116,7 +117,7 @@ def ui(**kwargs):
                     cfg_coef = gr.Number(label="Classifier Free Guidance", value=3.0, interactive=True)
             with gr.Column():
                 output = gr.Video(label="Generated Music")
-        submit.click(predict, inputs=[model, text, melody, duration, topk, topp, temperature, cfg_coef], outputs=[output])
+        submit.click(predict, inputs=[model, text, melody, duration, dimension, topk, topp, temperature, cfg_coef], outputs=[output])
         gr.Examples(
             fn=predict,
             examples=[
