@@ -13,7 +13,7 @@ import gradio as gr
 import os
 from audiocraft.models import MusicGen
 from audiocraft.data.audio import audio_write
-from audiocraft.utils.extend import generate_music_segments
+from audiocraft.utils.extend import generate_music_segments, add_settings_to_image, sanitize_file_name
 import numpy as np
 
 MODEL = None
@@ -25,7 +25,7 @@ def load_model(version):
     return MusicGen.get_pretrained(version)
 
 
-def predict(model, text, melody, duration, dimension, topk, topp, temperature, cfg_coef, background):
+def predict(model, text, melody, duration, dimension, topk, topp, temperature, cfg_coef, background, title, include_settings, settings_font, settings_font_color):
     global MODEL    
     output_segments = None
     topk = int(topk)
@@ -75,6 +75,10 @@ def predict(model, text, melody, duration, dimension, topk, topp, temperature, c
     else:
         output = output.detach().cpu().float()[0]
     with NamedTemporaryFile("wb", suffix=".wav", delete=False) as file:
+        if include_settings:
+            video_description = f"{text}\n Duration: {str(duration)} Dimension: {dimension}\n Top-k:{topk} Top-p:{topp}\n Randomness:{temperature}\n cfg:{cfg_coef}"
+            background = add_settings_to_image(title, video_description, background_path=background, font=settings_font, font_color=settings_font_color)
+        #filename = sanitize_file_name(title) if title != "" else file.name
         audio_write(
             file.name, output, MODEL.sample_rate, strategy="loudness",
             loudness_headroom_db=16, loudness_compressor=True, add_suffix=False)
@@ -102,12 +106,17 @@ def ui(**kwargs):
         with gr.Row():
             with gr.Column():
                 with gr.Row():
-                    text = gr.Text(label="Input Text", interactive=True)
+                    text = gr.Text(label="Input Text", interactive=True, value="4/4 100bpm 320kbps 48khz, Industrial/Electronic Soundtrack, Dark, Intense, Sci-Fi")
                     melody = gr.Audio(source="upload", type="numpy", label="Melody Condition (optional)", interactive=True)
                 with gr.Row():
                     submit = gr.Button("Submit")
                 with gr.Row():
                     background= gr.Image(value="./assets/background.png", source="upload", label="Background", shape=(768,512), type="filepath", interactive=True)
+                    include_settings = gr.Checkbox(label="Add Settings to background", value=True, interactive=True)
+                with gr.Row():
+                    title = gr.Textbox(label="Title", value="MusicGen", interactive=True)
+                    settings_font = gr.Text(label="Settings Font", value="arial.ttf", interactive=True)
+                    settings_font_color = gr.ColorPicker(label="Settings Font Color", value="#ffffff", interactive=True)
                 with gr.Row():
                     model = gr.Radio(["melody", "medium", "small", "large"], label="Model", value="melody", interactive=True)
                 with gr.Row():
@@ -116,11 +125,11 @@ def ui(**kwargs):
                 with gr.Row():
                     topk = gr.Number(label="Top-k", value=250, interactive=True)
                     topp = gr.Number(label="Top-p", value=0, interactive=True)
-                    temperature = gr.Number(label="Temperature", value=1.0, interactive=True)
-                    cfg_coef = gr.Number(label="Classifier Free Guidance", value=3.0, interactive=True)
+                    temperature = gr.Number(label="Randomness Temperature", value=1.0, precision=2, interactive=True)
+                    cfg_coef = gr.Number(label="Classifier Free Guidance", value=3.0, precision=2, interactive=True)
             with gr.Column():
                 output = gr.Video(label="Generated Music")
-        submit.click(predict, inputs=[model, text, melody, duration, dimension, topk, topp, temperature, cfg_coef, background], outputs=[output])
+        submit.click(predict, inputs=[model, text, melody, duration, dimension, topk, topp, temperature, cfg_coef, background, title, include_settings, settings_font, settings_font_color], outputs=[output])
         gr.Examples(
             fn=predict,
             examples=[
