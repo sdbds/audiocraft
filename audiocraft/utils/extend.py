@@ -45,7 +45,7 @@ def generate_music_segments(text, melody, MODEL, duration:int=10, segment_durati
 
     # Iterate over the segments to create list of Meldoy tensors
     for segment_idx in range(total_segments):
-        print(f"segment {segment_idx} of {total_segments} \r")
+        print(f"segment {segment_idx + 1} of {total_segments} \r")
         sr, verse = melody_segments[segment_idx][0], torch.from_numpy(melody_segments[segment_idx][1]).to(MODEL.device).float().t().unsqueeze(0)
 
         print(f"shape:{verse.shape} dim:{verse.dim()}")

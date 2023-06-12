@@ -40,6 +40,8 @@ def predict(texts, melodies):
             processed_melodies.append(None)
         else:
             sr, melody = melody[0], torch.from_numpy(melody[1]).to(MODEL.device).float().t()
+            duration = min(duration, melody.shape[-1] / sr)
+            MODEL.set_generation_params(duration=duration)
             if melody.dim() == 1:
                 melody = melody[None]
             melody = melody[..., :int(sr * duration)]
@@ -50,7 +52,7 @@ def predict(texts, melodies):
         descriptions=texts,
         melody_wavs=processed_melodies,
         melody_sample_rate=target_sr,
-        progress=False
+        progress=True
     )
 
     outputs = outputs.detach().cpu().float()

@@ -25,8 +25,9 @@ def load_model(version):
     return MusicGen.get_pretrained(version)
 
 
-def predict(model, text, melody, duration, dimension, topk, topp, temperature, cfg_coef):
-    global MODEL
+def predict(model, text, melody, duration, dimension, topk, topp, temperature, cfg_coef, background):
+    global MODEL    
+    output_segments = None
     topk = int(topk)
     if MODEL is None or MODEL.name != model:
         MODEL = load_model(model)
@@ -77,7 +78,7 @@ def predict(model, text, melody, duration, dimension, topk, topp, temperature, c
         audio_write(
             file.name, output, MODEL.sample_rate, strategy="loudness",
             loudness_headroom_db=16, loudness_compressor=True, add_suffix=False)
-        waveform_video = gr.make_waveform(file.name)
+        waveform_video = gr.make_waveform(file.name,bg_image=background, bar_count=40)
     return waveform_video
 
 
@@ -106,6 +107,8 @@ def ui(**kwargs):
                 with gr.Row():
                     submit = gr.Button("Submit")
                 with gr.Row():
+                    background= gr.Image(value="./assets/background.png", source="upload", label="Background", shape=(768,512), type="filepath", interactive=True)
+                with gr.Row():
                     model = gr.Radio(["melody", "medium", "small", "large"], label="Model", value="melody", interactive=True)
                 with gr.Row():
                     duration = gr.Slider(minimum=1, maximum=1000, value=10, label="Duration", interactive=True)
@@ -117,7 +120,7 @@ def ui(**kwargs):
                     cfg_coef = gr.Number(label="Classifier Free Guidance", value=3.0, interactive=True)
             with gr.Column():
                 output = gr.Video(label="Generated Music")
-        submit.click(predict, inputs=[model, text, melody, duration, dimension, topk, topp, temperature, cfg_coef], outputs=[output])
+        submit.click(predict, inputs=[model, text, melody, duration, dimension, topk, topp, temperature, cfg_coef, background], outputs=[output])
         gr.Examples(
             fn=predict,
             examples=[
