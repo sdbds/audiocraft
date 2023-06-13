@@ -11,6 +11,8 @@ import argparse
 import torch
 import gradio as gr
 import os
+import time
+import warnings
 from audiocraft.models import MusicGen
 from audiocraft.data.audio import audio_write
 from audiocraft.utils.extend import generate_music_segments, add_settings_to_image
@@ -20,6 +22,19 @@ import random
 MODEL = None
 IS_SHARED_SPACE = "musicgen/MusicGen" in os.environ.get('SPACE_ID', '')
 
+def interrupt():
+    global INTERRUPTING
+    INTERRUPTING = True
+
+
+def make_waveform(*args, **kwargs):
+    # Further remove some warnings.
+    be = time.time()
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        out = gr.make_waveform(*args, **kwargs)
+        print("Make a video took", time.time() - be)
+        return out
 
 def load_model(version):
     print("Loading model", version)
@@ -102,7 +117,7 @@ def predict(model, text, melody, duration, dimension, topk, topp, temperature, c
             output = output_segments[0]
             for i in range(1, len(output_segments)):
                 overlap_samples = overlap * MODEL.sample_rate
-                output = torch.cat([output[:, :, :-overlap_samples], output_segments[i][:, :, overlap_samples:]], dim=2)
+                output = torch.cat([output[:, :, :-overlap_samples], output_segments[i][:, :, overlap_samples:]], dim=dimension)
             output = output.detach().cpu().float()[0]
         except Exception as e:
             print(f"Error combining segments: {e}. Using the first segment only.")
@@ -116,7 +131,7 @@ def predict(model, text, melody, duration, dimension, topk, topp, temperature, c
         audio_write(
             file.name, output, MODEL.sample_rate, strategy="loudness",
             loudness_headroom_db=16, loudness_compressor=True, add_suffix=False)
-        waveform_video = gr.make_waveform(file.name,bg_image=background, bar_count=40)
+        waveform_video = make_waveform(file.name,bg_image=background, bar_count=40)
     return waveform_video, seed
 
 
@@ -144,6 +159,8 @@ def ui(**kwargs):
                     melody = gr.Audio(source="upload", type="numpy", label="Melody Condition (optional)", interactive=True)
                 with gr.Row():
                     submit = gr.Button("Submit")
+                    # Adapted from https://github.com/rkfg/audiocraft/blob/long/app.py, MIT license.
+                    _ = gr.Button("Interrupt").click(fn=interrupt, queue=False)
                 with gr.Row():
                     background= gr.Image(value="./assets/background.png", source="upload", label="Background", shape=(768,512), type="filepath", interactive=True)
                     include_settings = gr.Checkbox(label="Add Settings to background", value=True, interactive=True)
@@ -156,7 +173,7 @@ def ui(**kwargs):
                 with gr.Row():
                     duration = gr.Slider(minimum=1, maximum=1000, value=10, label="Duration", interactive=True)
                     overlap = gr.Slider(minimum=1, maximum=29, value=5, step=1, label="Overlap", interactive=True)
-                    dimension = gr.Slider(minimum=-2, maximum=1, value=1, step=1, label="Dimension", info="determines which direction to add new segements of audio. (0 = stack tracks, 1 = lengthen, -1 = ?)", interactive=True)
+                    dimension = gr.Slider(minimum=-2, maximum=2, value=2, step=1, label="Dimension", info="determines which direction to add new segements of audio. (1 = stack tracks, 2 = lengthen, -2..0 = ?)", interactive=True)
                 with gr.Row():
                     topk = gr.Number(label="Top-k", value=250, interactive=True)
                     topp = gr.Number(label="Top-p", value=0, interactive=True)

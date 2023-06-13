@@ -30,7 +30,7 @@ def separate_audio_segments(audio, segment_duration=30, overlap=1):
     if total_samples > 0:
         segment = audio_data[-segment_samples:]
         segments.append((sr, segment))
-
+    print(f"separate_audio_segments: {len(segments)} segments")
     return segments
 
 def generate_music_segments(text, melody, MODEL, seed, duration:int=10, overlap:int=1, segment_duration:int=30):
@@ -43,9 +43,11 @@ def generate_music_segments(text, melody, MODEL, seed, duration:int=10, overlap:
     
     # Calculate the total number of segments
     total_segments = max(math.ceil(duration / segment_duration),1)
-
+    # account for overlap
+    duration = duration + max((total_segments - 1),0) * overlap
+    total_segments = max(math.ceil(duration / segment_duration),1)
     #calc excess duration
-    excess_duration = total_segments * segment_duration - duration
+    excess_duration = segment_duration - (total_segments * segment_duration - duration)
     print(f"total Segments to Generate: {total_segments} for {duration} seconds. Each segment is {segment_duration} seconds. Excess {excess_duration}")
 
     # If melody_segments is shorter than total_segments, repeat the segments until the total_segments is reached
