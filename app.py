@@ -13,7 +13,7 @@ import gradio as gr
 import os
 from audiocraft.models import MusicGen
 from audiocraft.data.audio import audio_write
-from audiocraft.utils.extend import generate_music_segments, add_settings_to_image, sanitize_file_name
+from audiocraft.utils.extend import generate_music_segments, add_settings_to_image
 import numpy as np
 import random
 
