@@ -33,47 +33,77 @@ def predict(model, text, melody, duration, dimension, topk, topp, temperature, c
     if MODEL is None or MODEL.name != model:
         MODEL = load_model(model)
 
-    if duration > MODEL.lm.cfg.dataset.segment_duration:
-        segment_duration = MODEL.lm.cfg.dataset.segment_duration
-    else:
-        segment_duration = duration
-    # implement seed
-    if seed < 0:
-        seed = random.randint(0, 0xffff_ffff_ffff)
-    torch.manual_seed(seed)
-    MODEL.set_generation_params(
-        use_sampling=True,
-        top_k=topk,
-        top_p=topp,
-        temperature=temperature,
-        cfg_coef=cfg_coef,
-        duration=segment_duration,
-    )
+    output = None
+    segment_duration = duration
+    initial_duration = duration
+    output_segments = []
+    while duration > 0:
+        if not output_segments: # first pass of long or short song
+            if segment_duration > MODEL.lm.cfg.dataset.segment_duration:
+                segment_duration = MODEL.lm.cfg.dataset.segment_duration
+            else:
+                segment_duration = duration
+        else: # next pass of long song
+            if duration + overlap < MODEL.lm.cfg.dataset.segment_duration:
+                segment_duration = duration + overlap
+            else:
+                segment_duration = MODEL.lm.cfg.dataset.segment_duration
+        # implement seed
+        if seed < 0:
+            seed = random.randint(0, 0xffff_ffff_ffff)
+        torch.manual_seed(seed)
 
-    if melody:
-        if duration > MODEL.lm.cfg.dataset.segment_duration:
-            output_segments = generate_music_segments(text, melody, MODEL, seed, duration, overlap, MODEL.lm.cfg.dataset.segment_duration)
+        print(f'Segment duration: {segment_duration}, duration: {duration}, overlap: {overlap}')
+        MODEL.set_generation_params(
+            use_sampling=True,
+            top_k=topk,
+            top_p=topp,
+            temperature=temperature,
+            cfg_coef=cfg_coef,
+            duration=segment_duration,
+        )
+
+        if melody:
+            # todo return excess duration, load next model and continue in loop structure building up output_segments
+            if duration > MODEL.lm.cfg.dataset.segment_duration:
+                output_segments, duration = generate_music_segments(text, melody, MODEL, seed, duration, overlap, MODEL.lm.cfg.dataset.segment_duration)
+            else:
+                # pure original code
+                sr, melody = melody[0], torch.from_numpy(melody[1]).to(MODEL.device).float().t().unsqueeze(0)
+                print(melody.shape)
+                if melody.dim() == 2:
+                    melody = melody[None]
+                melody = melody[..., :int(sr * MODEL.lm.cfg.dataset.segment_duration)]
+                output = MODEL.generate_with_chroma(
+                    descriptions=[text],
+                    melody_wavs=melody,
+                    melody_sample_rate=sr,
+                    progress=True
+                )
+            # All output_segments are populated, so we can break the loop or set duration to 0
+            break
         else:
-            # pure original code
-            sr, melody = melody[0], torch.from_numpy(melody[1]).to(MODEL.device).float().t().unsqueeze(0)
-            print(melody.shape)
-            if melody.dim() == 2:
-                melody = melody[None]
-            melody = melody[..., :int(sr * MODEL.lm.cfg.dataset.segment_duration)]
-            output = MODEL.generate_with_chroma(
-                descriptions=[text],
-                melody_wavs=melody,
-                melody_sample_rate=sr,
-                progress=True
-            )
-    else:
-        output = MODEL.generate(descriptions=[text], progress=False)
+            #output = MODEL.generate(descriptions=[text], progress=False)
+            if not output_segments:
+                next_segment = MODEL.generate(descriptions=[text], progress=True)
+                duration -= segment_duration
+            else:
+                last_chunk = output_segments[-1][:, :, -overlap*MODEL.sample_rate:]
+                next_segment = MODEL.generate_continuation(last_chunk, MODEL.sample_rate, descriptions=[text], progress=True)
+                duration -= segment_duration - overlap
+            output_segments.append(next_segment)
 
     if output_segments:
         try:
-            # Combine the output segments into one long audio file
-            output_segments = [segment.detach().cpu().float()[0] for segment in output_segments]
-            output = torch.cat(output_segments, dim=dimension)
+            # Combine the output segments into one long audio file or stack tracks
+            #output_segments = [segment.detach().cpu().float()[0] for segment in output_segments]
+            #output = torch.cat(output_segments, dim=dimension)
+            
+            output = output_segments[0]
+            for i in range(1, len(output_segments)):
+                overlap_samples = overlap * MODEL.sample_rate
+                output = torch.cat([output[:, :, :-overlap_samples], output_segments[i][:, :, overlap_samples:]], dim=2)
+            output = output.detach().cpu().float()[0]
         except Exception as e:
             print(f"Error combining segments: {e}. Using the first segment only.")
             output = output_segments[0].detach().cpu().float()[0]
@@ -81,7 +111,7 @@ def predict(model, text, melody, duration, dimension, topk, topp, temperature, c
         output = output.detach().cpu().float()[0]
     with NamedTemporaryFile("wb", suffix=".wav", delete=False) as file:
         if include_settings:
-            video_description = f"{text}\n Duration: {str(duration)} Dimension: {dimension}\n Top-k:{topk} Top-p:{topp}\n Randomness:{temperature}\n cfg:{cfg_coef} overlap: {overlap}\n Seed: {seed}"
+            video_description = f"{text}\n Duration: {str(initial_duration)} Dimension: {dimension}\n Top-k:{topk} Top-p:{topp}\n Randomness:{temperature}\n cfg:{cfg_coef} overlap: {overlap}\n Seed: {seed}"
             background = add_settings_to_image(title, video_description, background_path=background, font=settings_font, font_color=settings_font_color)
         audio_write(
             file.name, output, MODEL.sample_rate, strategy="loudness",

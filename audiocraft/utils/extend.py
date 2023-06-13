@@ -43,10 +43,14 @@ def generate_music_segments(text, melody, MODEL, seed, duration:int=10, overlap:
     
     # Calculate the total number of segments
     total_segments = max(math.ceil(duration / segment_duration),1)
-    print(f"total Segments to Generate: {total_segments} for {duration} seconds. Each segment is {segment_duration} seconds")
+
+    #calc excess duration
+    excess_duration = total_segments * segment_duration - duration
+    print(f"total Segments to Generate: {total_segments} for {duration} seconds. Each segment is {segment_duration} seconds. Excess {excess_duration}")
 
     # If melody_segments is shorter than total_segments, repeat the segments until the total_segments is reached
     if len(melody_segments) < total_segments:
+        #fix melody_segments
         for i in range(total_segments - len(melody_segments)):
             segment = melody_segments[i]
             melody_segments.append(segment)
@@ -78,7 +82,7 @@ def generate_music_segments(text, melody, MODEL, seed, duration:int=10, overlap:
         #output_segments.append(output[:, :segment_duration])
         output_segments.append(output)
         print(f"output_segments: {len(output_segments)}: shape: {output.shape} dim {output.dim()}")
-    return output_segments
+    return output_segments, excess_duration
 
 def save_image(image):
     """
