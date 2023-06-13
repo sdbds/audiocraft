@@ -8,29 +8,34 @@ import tempfile
 import os
 import textwrap
 
-def separate_audio_segments(audio, segment_duration=30):
+def separate_audio_segments(audio, segment_duration=30, overlap=1):
     sr, audio_data = audio[0], audio[1]
-    
+
     total_samples = len(audio_data)
     segment_samples = sr * segment_duration
-    
-    total_segments = math.ceil(total_samples / segment_samples)
-    
+    overlap_samples = sr * overlap
+
     segments = []
-    
-    for segment_idx in range(total_segments):
-        print(f"Audio Input segment {segment_idx + 1} / {total_segments + 1} \r")
-        start_sample = segment_idx * segment_samples
-        end_sample = (segment_idx + 1) * segment_samples
-        
+    start_sample = 0
+
+    while total_samples >= segment_samples:
+        end_sample = start_sample + segment_samples
         segment = audio_data[start_sample:end_sample]
         segments.append((sr, segment))
-    
+
+        start_sample += segment_samples - overlap_samples
+        total_samples -= segment_samples - overlap_samples
+
+    # Collect the final segment
+    if total_samples > 0:
+        segment = audio_data[-segment_samples:]
+        segments.append((sr, segment))
+
     return segments
 
-def generate_music_segments(text, melody, MODEL, duration:int=10, segment_duration:int=30):
+def generate_music_segments(text, melody, MODEL, seed, duration:int=10, overlap:int=1, segment_duration:int=30):
     # generate audio segments
-    melody_segments = separate_audio_segments(melody, segment_duration) 
+    melody_segments = separate_audio_segments(melody, segment_duration, overlap) 
     
     # Create a list to store the melody tensors for each segment
     melodys = []
@@ -40,7 +45,7 @@ def generate_music_segments(text, melody, MODEL, duration:int=10, segment_durati
     total_segments = max(math.ceil(duration / segment_duration),1)
     print(f"total Segments to Generate: {total_segments} for {duration} seconds. Each segment is {segment_duration} seconds")
 
-    # If melody_segments is shorter than total_segments, repeat the segments until the total number of segments is reached
+    # If melody_segments is shorter than total_segments, repeat the segments until the total_segments is reached
     if len(melody_segments) < total_segments:
         for i in range(total_segments - len(melody_segments)):
             segment = melody_segments[i]
@@ -59,6 +64,7 @@ def generate_music_segments(text, melody, MODEL, duration:int=10, segment_durati
         # Append the segment to the melodys list
         melodys.append(verse)
 
+    torch.manual_seed(seed)
     for idx, verse in enumerate(melodys):
         print(f"Generating New Melody Segment {idx + 1}: {text}\r")
         output = MODEL.generate_with_chroma(
@@ -73,42 +79,6 @@ def generate_music_segments(text, melody, MODEL, duration:int=10, segment_durati
         output_segments.append(output)
         print(f"output_segments: {len(output_segments)}: shape: {output.shape} dim {output.dim()}")
     return output_segments
-
-#def generate_music_segments(text, melody, duration, MODEL, segment_duration=30):
-#    sr, melody = melody[0], torch.from_numpy(melody[1]).to(MODEL.device).float().t().unsqueeze(0)
-    
-#    # Create a list to store the melody tensors for each segment
-#    melodys = []
-    
-#    # Calculate the total number of segments
-#    total_segments = math.ceil(melody.shape[1] / (sr * segment_duration))
-
-#    # Iterate over the segments
-#    for segment_idx in range(total_segments):
-#        print(f"segment {segment_idx + 1} / {total_segments + 1} \r")
-#        start_frame = segment_idx * sr * segment_duration
-#        end_frame = (segment_idx + 1) * sr * segment_duration
-
-#        # Extract the segment from the melody tensor
-#        segment = melody[:, start_frame:end_frame]
-
-#        # Append the segment to the melodys list
-#        melodys.append(segment)
-
-#    output_segments = []
-
-#    for segment in melodys:
-#        output = MODEL.generate_with_chroma(
-#            descriptions=[text],
-#            melody_wavs=segment,
-#            melody_sample_rate=sr,
-#            progress=False
-#        )
-
-#        # Append the generated output to the list of segments
-#        output_segments.append(output[:, :segment_duration])
-
-#    return output_segments
 
 def save_image(image):
     """
@@ -185,12 +155,3 @@ def add_settings_to_image(title: str = "title", description: str = "", width: in
 
     # Save the image and return the file path
     return save_image(background)
-
-
-def sanitize_file_name(filename):
-    valid_chars = "-_.() " + string.ascii_letters + string.digits
-    sanitized_filename = ''.join(c for c in filename if c in valid_chars)
-    return sanitized_filename
-
-
-

@@ -15,6 +15,7 @@ from audiocraft.models import MusicGen
 from audiocraft.data.audio import audio_write
 from audiocraft.utils.extend import generate_music_segments, add_settings_to_image, sanitize_file_name
 import numpy as np
+import random
 
 MODEL = None
 IS_SHARED_SPACE = "musicgen/MusicGen" in os.environ.get('SPACE_ID', '')
@@ -25,7 +26,7 @@ def load_model(version):
     return MusicGen.get_pretrained(version)
 
 
-def predict(model, text, melody, duration, dimension, topk, topp, temperature, cfg_coef, background, title, include_settings, settings_font, settings_font_color):
+def predict(model, text, melody, duration, dimension, topk, topp, temperature, cfg_coef, background, title, include_settings, settings_font, settings_font_color, seed, overlap=1):
     global MODEL    
     output_segments = None
     topk = int(topk)
@@ -36,6 +37,10 @@ def predict(model, text, melody, duration, dimension, topk, topp, temperature, c
         segment_duration = MODEL.lm.cfg.dataset.segment_duration
     else:
         segment_duration = duration
+    # implement seed
+    if seed < 0:
+        seed = random.randint(0, 0xffff_ffff_ffff)
+    torch.manual_seed(seed)
     MODEL.set_generation_params(
         use_sampling=True,
         top_k=topk,
@@ -47,7 +52,7 @@ def predict(model, text, melody, duration, dimension, topk, topp, temperature, c
 
     if melody:
         if duration > MODEL.lm.cfg.dataset.segment_duration:
-            output_segments = generate_music_segments(text, melody, MODEL, duration, MODEL.lm.cfg.dataset.segment_duration)
+            output_segments = generate_music_segments(text, melody, MODEL, seed, duration, overlap, MODEL.lm.cfg.dataset.segment_duration)
         else:
             # pure original code
             sr, melody = melody[0], torch.from_numpy(melody[1]).to(MODEL.device).float().t().unsqueeze(0)
@@ -76,14 +81,13 @@ def predict(model, text, melody, duration, dimension, topk, topp, temperature, c
         output = output.detach().cpu().float()[0]
     with NamedTemporaryFile("wb", suffix=".wav", delete=False) as file:
         if include_settings:
-            video_description = f"{text}\n Duration: {str(duration)} Dimension: {dimension}\n Top-k:{topk} Top-p:{topp}\n Randomness:{temperature}\n cfg:{cfg_coef}"
+            video_description = f"{text}\n Duration: {str(duration)} Dimension: {dimension}\n Top-k:{topk} Top-p:{topp}\n Randomness:{temperature}\n cfg:{cfg_coef} overlap: {overlap}\n Seed: {seed}"
             background = add_settings_to_image(title, video_description, background_path=background, font=settings_font, font_color=settings_font_color)
-        #filename = sanitize_file_name(title) if title != "" else file.name
         audio_write(
             file.name, output, MODEL.sample_rate, strategy="loudness",
             loudness_headroom_db=16, loudness_compressor=True, add_suffix=False)
         waveform_video = gr.make_waveform(file.name,bg_image=background, bar_count=40)
-    return waveform_video
+    return waveform_video, seed
 
 
 def ui(**kwargs):
@@ -121,15 +125,23 @@ def ui(**kwargs):
                     model = gr.Radio(["melody", "medium", "small", "large"], label="Model", value="melody", interactive=True)
                 with gr.Row():
                     duration = gr.Slider(minimum=1, maximum=1000, value=10, label="Duration", interactive=True)
+                    overlap = gr.Slider(minimum=1, maximum=29, value=5, step=1, label="Overlap", interactive=True)
                     dimension = gr.Slider(minimum=-2, maximum=1, value=1, step=1, label="Dimension", info="determines which direction to add new segements of audio. (0 = stack tracks, 1 = lengthen, -1 = ?)", interactive=True)
                 with gr.Row():
                     topk = gr.Number(label="Top-k", value=250, interactive=True)
                     topp = gr.Number(label="Top-p", value=0, interactive=True)
                     temperature = gr.Number(label="Randomness Temperature", value=1.0, precision=2, interactive=True)
                     cfg_coef = gr.Number(label="Classifier Free Guidance", value=3.0, precision=2, interactive=True)
-            with gr.Column():
+                with gr.Row():
+                    seed = gr.Number(label="Seed", value=-1, precision=0, interactive=True)
+                    gr.Button('\U0001f3b2\ufe0f').style(full_width=False).click(fn=lambda: -1, outputs=[seed], queue=False)
+                    reuse_seed = gr.Button('\u267b\ufe0f').style(full_width=False)
+            with gr.Column() as c:
                 output = gr.Video(label="Generated Music")
-        submit.click(predict, inputs=[model, text, melody, duration, dimension, topk, topp, temperature, cfg_coef, background, title, include_settings, settings_font, settings_font_color], outputs=[output])
+                seed_used = gr.Number(label='Seed used', value=-1, interactive=False)
+
+        reuse_seed.click(fn=lambda x: x, inputs=[seed_used], outputs=[seed], queue=False)
+        submit.click(predict, inputs=[model, text, melody, duration, dimension, topk, topp, temperature, cfg_coef, background, title, include_settings, settings_font, settings_font_color, seed, overlap], outputs=[output, seed_used])
         gr.Examples(
             fn=predict,
             examples=[
