@@ -157,13 +157,16 @@ def load_font(font_name, font_size=16):
     except (FileNotFoundError, OSError):
         try:
             font = ImageFont.truetype(font_name, font_size)
+            print("Font not found. Downloading from Hugging Face model hub...\n")
         except:
             try:
                 req = requests.get(font_name)
                 font = ImageFont.truetype(BytesIO(req.content), font_size)
+                print("Font not found. Downloading from URL...\n")
             except:
                 try:
-                    font = ImageFont.truetype(hf_hub_download(".assets", font_name), encoding="UTF-8")
+                    font = ImageFont.truetype(hf_hub_download("/assets", font_name), encoding="UTF-8")
+                    print(f"Font not found: {font_name} Using default font\n")
                 except:
                     font = ImageFont.load_default()
     return font

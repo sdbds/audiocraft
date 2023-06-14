@@ -141,10 +141,9 @@ def ui(**kwargs):
             """
             # MusicGen
             This is your private demo for [MusicGen](https://github.com/facebookresearch/audiocraft), a simple and controllable model for music generation
-            This is your private demo for [UnlimitedMusicGen](https://github.com/Oncorporation/audiocraft), a simple and controllable model for music generation
+
             presented at: ["Simple and Controllable Music Generation"](https://huggingface.co/papers/2306.05284)
 
-            Disclaimer: This won't run on CPU only. Clone this App and run on GPU instance!
             """
         )
         if IS_SHARED_SPACE:
