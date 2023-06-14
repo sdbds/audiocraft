@@ -7,6 +7,9 @@ import string
 import tempfile
 import os
 import textwrap
+import requests
+from io import BytesIO
+from huggingface_hub import hf_hub_download
 
 def separate_audio_segments(audio, segment_duration=30, overlap=1):
     sr, audio_data = audio[0], audio[1]
@@ -122,6 +125,50 @@ def hex_to_rgba(hex_color):
         rgba = (255,255,0,255)
     return rgba
 
+def load_font(font_name, font_size=16):
+    """
+    Load a font using the provided font name and font size.
+
+    Parameters:
+        font_name (str): The name of the font to load. Can be a font name recognized by the system, a URL to download the font file,
+            a local file path, or a Hugging Face model hub identifier.
+        font_size (int, optional): The size of the font. Default is 16.
+
+    Returns:
+        ImageFont.FreeTypeFont: The loaded font object.
+
+    Notes:
+        This function attempts to load the font using various methods until a suitable font is found. If the provided font_name
+        cannot be loaded, it falls back to a default font.
+
+        The font_name can be one of the following:
+        - A font name recognized by the system, which can be loaded using ImageFont.truetype.
+        - A URL pointing to the font file, which is downloaded using requests and then loaded using ImageFont.truetype.
+        - A local file path to the font file, which is loaded using ImageFont.truetype.
+        - A Hugging Face model hub identifier, which downloads the font file from the Hugging Face model hub using hf_hub_download
+          and then loads it using ImageFont.truetype.
+
+    Example:
+        font = load_font("Arial.ttf", font_size=20)
+    """
+
+    try:
+        font = ImageFont.truetype(font_name, font_size)
+    except (FileNotFoundError, OSError):
+        try:
+            font = ImageFont.truetype(font_name, font_size)
+        except:
+            try:
+                req = requests.get(font_name)
+                font = ImageFont.truetype(BytesIO(req.content), font_size)
+            except:
+                try:
+                    font = ImageFont.truetype(hf_hub_download(".assets", font_name), encoding="UTF-8")
+                except:
+                    font = ImageFont.load_default()
+    return font
+
+
 def add_settings_to_image(title: str = "title", description: str = "", width: int = 768, height: int = 512, background_path: str = "", font: str = "arial.ttf", font_color: str = "#ffffff"):
     # Create a new RGBA image with the specified dimensions
     image = Image.new("RGBA", (width, height), (255, 255, 255, 0))
@@ -138,7 +185,8 @@ def add_settings_to_image(title: str = "title", description: str = "", width: in
     text_x = width // 2
     text_y = height // 2
     # Draw the title text at the center top
-    title_font = ImageFont.truetype(font, 26)  # Replace with your desired font and size
+    title_font = load_font(font, 26)  # Replace with your desired font and size
+
     title_text = '\n'.join(textwrap.wrap(title, width // 12))
     title_x, title_y, title_text_width, title_text_height = title_font.getbbox(title_text)
     title_x = max(text_x - (title_text_width // 2), title_x, 0)
@@ -146,7 +194,7 @@ def add_settings_to_image(title: str = "title", description: str = "", width: in
     title_draw = ImageDraw.Draw(image)
     title_draw.multiline_text((title_x, title_y), title, fill=font_color, font=title_font, align="center")
     # Draw the description text two lines below the title
-    description_font = ImageFont.truetype(font, 16)  # Replace with your desired font and size
+    description_font = load_font(font, 16)  # Replace with your desired font and size
     description_text = '\n'.join(textwrap.wrap(description, width // 12))
     description_x, description_y, description_text_width, description_text_height = description_font.getbbox(description_text)
     description_x = max(text_x - (description_text_width // 2), description_x, 0)
