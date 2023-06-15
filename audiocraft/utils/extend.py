@@ -22,12 +22,15 @@ def separate_audio_segments(audio, segment_duration=30, overlap=1):
     start_sample = 0
 
     while total_samples >= segment_samples:
+        # Collect the segment
+        # the end sample is the start sample plus the segment samples, 
+        # the start sample, after 0, is minus the overlap samples to account for the overlap        
         end_sample = start_sample + segment_samples
         segment = audio_data[start_sample:end_sample]
         segments.append((sr, segment))
 
         start_sample += segment_samples - overlap_samples
-        total_samples -= segment_samples - overlap_samples
+        total_samples -= segment_samples
 
     # Collect the final segment
     if total_samples > 0:
@@ -38,16 +41,15 @@ def separate_audio_segments(audio, segment_duration=30, overlap=1):
 
 def generate_music_segments(text, melody, MODEL, seed, duration:int=10, overlap:int=1, segment_duration:int=30):
     # generate audio segments
-    melody_segments = separate_audio_segments(melody, segment_duration, overlap) 
+    melody_segments = separate_audio_segments(melody, segment_duration, 0) 
     
     # Create a list to store the melody tensors for each segment
     melodys = []
     output_segments = []
+    last_chunk = []
+    text += ", seed=" + str(seed)
     
     # Calculate the total number of segments
-    total_segments = max(math.ceil(duration / segment_duration),1)
-    # account for overlap
-    duration = duration + (max((total_segments - 1),0) * overlap)
     total_segments = max(math.ceil(duration / segment_duration),1)
     #calc excess duration
     excess_duration = segment_duration - (total_segments * segment_duration - duration)
@@ -76,11 +78,15 @@ def generate_music_segments(text, melody, MODEL, seed, duration:int=10, overlap:
     torch.manual_seed(seed)
     for idx, verse in enumerate(melodys):
         print(f"Generating New Melody Segment {idx + 1}: {text}\r")
-        output = MODEL.generate_with_chroma(
+        if output_segments:
+            # If this isn't the first segment, use the last chunk of the previous segment as the input
+            last_chunk = output_segments[-1][:, :, -overlap*MODEL.sample_rate:]
+        output = MODEL.generate_with_all(
             descriptions=[text],
             melody_wavs=verse,
-            melody_sample_rate=sr,
-            progress=True
+            sample_rate=sr,
+            progress=True,
+            prompt=last_chunk if len(last_chunk) > 0 else None,
         )
 
         # Append the generated output to the list of segments
@@ -151,24 +157,31 @@ def load_font(font_name, font_size=16):
     Example:
         font = load_font("Arial.ttf", font_size=20)
     """
-
-    try:
-        font = ImageFont.truetype(font_name, font_size)
-    except (FileNotFoundError, OSError):
+    font = None
+    if not "http" in font_name:
         try:
             font = ImageFont.truetype(font_name, font_size)
-            print("Font not found. Downloading from Hugging Face model hub...\n")
-        except:
+        except (FileNotFoundError, OSError):
+            print("Font not found. Trying to download from local assets folder...\n")
+        if font is None:
             try:
-                req = requests.get(font_name)
-                font = ImageFont.truetype(BytesIO(req.content), font_size)
-                print("Font not found. Downloading from URL...\n")
-            except:
-                try:
-                    font = ImageFont.truetype(hf_hub_download("/assets", font_name), encoding="UTF-8")
-                    print(f"Font not found: {font_name} Using default font\n")
-                except:
-                    font = ImageFont.load_default()
+                font = ImageFont.truetype("assets/" + font_name, font_size)
+            except (FileNotFoundError, OSError):
+                print("Font not found. Trying to download from URL...\n")
+
+    if font is None:
+        try:
+            req = requests.get(font_name)
+            font = ImageFont.truetype(BytesIO(req.content), font_size)       
+        except (FileNotFoundError, OSError):
+             print(f"Font found: {font_name} Using Hugging Face download font\n")
+
+    if font is None:
+        try:
+            font = ImageFont.truetype(hf_hub_download("assets", font_name), encoding="UTF-8")        
+        except (FileNotFoundError, OSError):
+            font = ImageFont.load_default()
+            print(f"Font not found: {font_name} Using default font\n")
     return font
 
 

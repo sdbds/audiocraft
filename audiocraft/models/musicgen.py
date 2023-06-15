@@ -97,7 +97,7 @@ class MusicGen:
     def set_generation_params(self, use_sampling: bool = True, top_k: int = 250,
                               top_p: float = 0.0, temperature: float = 1.0,
                               duration: float = 30.0, cfg_coef: float = 3.0,
-                              two_step_cfg: bool = False):
+                              two_step_cfg: bool = False, rep_penalty: float = None):
         """Set the generation parameters for MusicGen.
 
         Args:
@@ -110,6 +110,7 @@ class MusicGen:
             two_step_cfg (bool, optional): If True, performs 2 forward for Classifier Free Guidance,
                 instead of batching together the two. This has some impact on how things
                 are padded but seems to have little impact in practice.
+            rep_penalty (float, optional): If set, use repetition penalty during generation. Not Implemented.
         """
         assert duration <= 30, "The MusicGen cannot generate more than 30 seconds"
         self.generation_params = {
@@ -119,7 +120,7 @@ class MusicGen:
             'top_k': top_k,
             'top_p': top_p,
             'cfg_coef': cfg_coef,
-            'two_step_cfg': two_step_cfg,
+            'two_step_cfg': two_step_cfg,            
         }
 
     def generate_unconditional(self, num_samples: int, progress: bool = False) -> torch.Tensor:
@@ -175,6 +176,58 @@ class MusicGen:
         attributes, prompt_tokens = self._prepare_tokens_and_attributes(descriptions=descriptions, prompt=None,
                                                                         melody_wavs=melody_wavs)
         assert prompt_tokens is None
+        return self._generate_tokens(attributes, prompt_tokens, progress)
+
+    def generate_with_all(self, descriptions: tp.List[str], melody_wavs: MelodyType,
+                             sample_rate: int, progress: bool = False, prompt: tp.Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Generate samples conditioned on text and melody and audio prompts.
+        Args:
+            descriptions (tp.List[str]): A list of strings used as text conditioning.
+            melody_wavs: (torch.Tensor or list of Tensor): A batch of waveforms used as
+                melody conditioning. Should have shape [B, C, T] with B matching the description length,
+                C=1 or 2. It can be [C, T] if there is a single description. It can also be
+                a list of [C, T] tensors.
+           sample_rate: (int): Sample rate of the melody waveforms.
+           progress (bool, optional): Flag to display progress of the generation process. Defaults to False.
+           prompt (torch.Tensor): A batch of waveforms used for continuation.
+                Prompt should be [B, C, T], or [C, T] if only one sample is generated.
+        """
+        if isinstance(melody_wavs, torch.Tensor):
+            if melody_wavs.dim() == 2:
+                melody_wavs = melody_wavs[None]
+            if melody_wavs.dim() != 3:
+                raise ValueError("Melody wavs should have a shape [B, C, T].")
+            melody_wavs = list(melody_wavs)
+        else:
+            for melody in melody_wavs:
+                if melody is not None:
+                    assert melody.dim() == 2, "One melody in the list has the wrong number of dims."
+
+        melody_wavs = [
+            convert_audio(wav, sample_rate, self.sample_rate, self.audio_channels)
+            if wav is not None else None
+            for wav in melody_wavs]
+        attributes, prompt_tokens = self._prepare_tokens_and_attributes(descriptions=descriptions, prompt=None,
+                                                                        melody_wavs=melody_wavs)
+
+        if prompt is not None:
+            if prompt.dim() == 2:
+                prompt = prompt[None]
+            if prompt.dim() != 3:
+                raise ValueError("prompt should have 3 dimensions: [B, C, T] (C = 1).")
+            prompt = convert_audio(prompt, sample_rate, self.sample_rate, self.audio_channels)
+        if descriptions is None:
+            descriptions = [None] * len(prompt)
+
+        if prompt is not None:
+            attributes_gen, prompt_tokens = self._prepare_tokens_and_attributes(descriptions, prompt)
+        
+        #attributes, prompt_tokens = self._prepare_tokens_and_attributes(descriptions=descriptions, prompt=prompt,
+        #                                                                melody_wavs=melody_wavs)
+        if prompt is not None:
+            assert prompt_tokens is not None
+        else:
+            assert prompt_tokens is None
         return self._generate_tokens(attributes, prompt_tokens, progress)
 
     def generate_continuation(self, prompt: torch.Tensor, prompt_sample_rate: int,

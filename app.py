@@ -76,6 +76,8 @@ def predict(model, text, melody, duration, dimension, topk, topp, temperature, c
             temperature=temperature,
             cfg_coef=cfg_coef,
             duration=segment_duration,
+            two_step_cfg=False,
+            rep_penalty=0.5
         )
 
         if melody:
@@ -168,7 +170,7 @@ def ui(**kwargs):
                     include_settings = gr.Checkbox(label="Add Settings to background", value=True, interactive=True)
                 with gr.Row():
                     title = gr.Textbox(label="Title", value="MusicGen", interactive=True)
-                    settings_font = gr.Text(label="Settings Font", value="arial.ttf", interactive=True)
+                    settings_font = gr.Text(label="Settings Font", value="./assets/arial.ttf", interactive=True)
                     settings_font_color = gr.ColorPicker(label="Settings Font Color", value="#ffffff", interactive=True)
                 with gr.Row():
                     model = gr.Radio(["melody", "medium", "small", "large"], label="Model", value="melody", interactive=True)
@@ -179,8 +181,8 @@ def ui(**kwargs):
                 with gr.Row():
                     topk = gr.Number(label="Top-k", value=250, interactive=True)
                     topp = gr.Number(label="Top-p", value=0, interactive=True)
-                    temperature = gr.Number(label="Randomness Temperature", value=1.0, precision=2, interactive=True)
-                    cfg_coef = gr.Number(label="Classifier Free Guidance", value=3.0, precision=2, interactive=True)
+                    temperature = gr.Number(label="Randomness Temperature", value=0.75, precision=None, interactive=True)
+                    cfg_coef = gr.Number(label="Classifier Free Guidance", value=5.5, precision=None, interactive=True)
                 with gr.Row():
                     seed = gr.Number(label="Seed", value=-1, precision=0, interactive=True)
                     gr.Button('\U0001f3b2\ufe0f').style(full_width=False).click(fn=lambda: -1, outputs=[seed], queue=False)
