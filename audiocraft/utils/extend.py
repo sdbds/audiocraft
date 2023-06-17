@@ -42,7 +42,7 @@ def separate_audio_segments(audio, segment_duration=30, overlap=1):
     print(f"separate_audio_segments: {len(segments)} segments")
     return segments
 
-def generate_music_segments(text, melody, MODEL, seed, duration:int=10, overlap:int=1, segment_duration:int=30):
+def generate_music_segments(text, melody, seed, MODEL, duration:int=10, overlap:int=1, segment_duration:int=30):
     # generate audio segments
     melody_segments = separate_audio_segments(melody, segment_duration, 0) 
     

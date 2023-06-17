@@ -121,7 +121,7 @@ def predict(model, text, melody, duration, dimension, topk, topp, temperature, c
         if melody:
             # todo return excess duration, load next model and continue in loop structure building up output_segments
             if duration > MODEL.lm.cfg.dataset.segment_duration:
-                output_segments, duration = generate_music_segments(text, melody, MODEL, seed, duration, overlap, MODEL.lm.cfg.dataset.segment_duration)
+                output_segments, duration = generate_music_segments(text, melody, seed, MODEL, duration, overlap, MODEL.lm.cfg.dataset.segment_duration)
             else:
                 # pure original code
                 sr, melody = melody[0], torch.from_numpy(melody[1]).to(MODEL.device).float().t().unsqueeze(0)
