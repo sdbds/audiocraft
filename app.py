@@ -15,12 +15,19 @@ import time
 import warnings
 from audiocraft.models import MusicGen
 from audiocraft.data.audio import audio_write
-from audiocraft.utils.extend import generate_music_segments, add_settings_to_image
+from audiocraft.utils.extend import generate_music_segments, add_settings_to_image, INTERRUPTING
 import numpy as np
 import random
 
 MODEL = None
+MODELS = None
 IS_SHARED_SPACE = "musicgen/MusicGen" in os.environ.get('SPACE_ID', '')
+INTERRUPTED = False
+UNLOAD_MODEL = False
+MOVE_TO_CPU = False
+
+def interrupt_callback():
+    return INTERRUPTED
 
 def interrupt():
     global INTERRUPTING
@@ -37,16 +44,45 @@ def make_waveform(*args, **kwargs):
         return out
 
 def load_model(version):
+    global MODEL, MODELS, UNLOAD_MODEL
     print("Loading model", version)
-    return MusicGen.get_pretrained(version)
+    if MODELS is None:
+        return MusicGen.get_pretrained(version)
+    else:
+        t1 = time.monotonic()
+        if MODEL is not None:
+            MODEL.to('cpu') # move to cache
+            print("Previous model moved to CPU in %.2fs" % (time.monotonic() - t1))
+            t1 = time.monotonic()
+        if MODELS.get(version) is None:
+            print("Loading model %s from disk" % version)
+            result = MusicGen.get_pretrained(version)
+            MODELS[version] = result
+            print("Model loaded in %.2fs" % (time.monotonic() - t1))
+            return result
+        result = MODELS[version].to('cuda')
+        print("Cached model loaded in %.2fs" % (time.monotonic() - t1))
+        return result
 
 
 def predict(model, text, melody, duration, dimension, topk, topp, temperature, cfg_coef, background, title, include_settings, settings_font, settings_font_color, seed, overlap=1):
-    global MODEL    
+    global MODEL, INTERRUPTED, INTERRUPTING
     output_segments = None
-    topk = int(topk)
+
+    INTERRUPTED = False
+    INTERRUPTING = False
+    if temperature < 0:
+        raise gr.Error("Temperature must be >= 0.")
+    if topk < 0:
+        raise gr.Error("Topk must be non-negative.")
+    if topp < 0:
+        raise gr.Error("Topp must be non-negative.")
+
     if MODEL is None or MODEL.name != model:
         MODEL = load_model(model)
+    else:
+        if MOVE_TO_CPU:
+            MODEL.to('cuda')
 
     output = None
     segment_duration = duration
@@ -67,6 +103,7 @@ def predict(model, text, melody, duration, dimension, topk, topp, temperature, c
         if seed < 0:
             seed = random.randint(0, 0xffff_ffff_ffff)
         torch.manual_seed(seed)
+
 
         print(f'Segment duration: {segment_duration}, duration: {duration}, overlap: {overlap}')
         MODEL.set_generation_params(
@@ -110,6 +147,12 @@ def predict(model, text, melody, duration, dimension, topk, topp, temperature, c
                 duration -= segment_duration - overlap
             output_segments.append(next_segment)
 
+        if INTERRUPTING:
+            INTERRUPTED = True
+            INTERRUPTING = False
+            print("Function execution interrupted!")
+            raise gr.Error("Interrupted.")
+
     if output_segments:
         try:
             # Combine the output segments into one long audio file or stack tracks
@@ -119,32 +162,44 @@ def predict(model, text, melody, duration, dimension, topk, topp, temperature, c
             output = output_segments[0]
             for i in range(1, len(output_segments)):
                 overlap_samples = overlap * MODEL.sample_rate
-                output = torch.cat([output[:, :, :-overlap_samples], output_segments[i][:, :, overlap_samples:]], dim=dimension)
+                output = torch.cat([output[:, :, :-overlap_samples], output_segments[i]], dim=dimension)
             output = output.detach().cpu().float()[0]
         except Exception as e:
             print(f"Error combining segments: {e}. Using the first segment only.")
             output = output_segments[0].detach().cpu().float()[0]
     else:
         output = output.detach().cpu().float()[0]
+
     with NamedTemporaryFile("wb", suffix=".wav", delete=False) as file:
         if include_settings:
-            video_description = f"{text}\n Duration: {str(initial_duration)} Dimension: {dimension}\n Top-k:{topk} Top-p:{topp}\n Randomness:{temperature}\n cfg:{cfg_coef} overlap: {overlap}\n Seed: {seed}\n Melody File: #todo"
+            video_description = f"{text}\n Duration: {str(initial_duration)} Dimension: {dimension}\n Top-k:{topk} Top-p:{topp}\n Randomness:{temperature}\n cfg:{cfg_coef} overlap: {overlap}\n Seed: {seed}\n Model: {model}\n Melody File:#todo"
             background = add_settings_to_image(title, video_description, background_path=background, font=settings_font, font_color=settings_font_color)
         audio_write(
             file.name, output, MODEL.sample_rate, strategy="loudness",
-            loudness_headroom_db=16, loudness_compressor=True, add_suffix=False)
-        waveform_video = make_waveform(file.name,bg_image=background, bar_count=40)
+            loudness_headroom_db=19, loudness_compressor=True, add_suffix=False, channels=2)
+        waveform_video = make_waveform(file.name,bg_image=background, bar_count=45)
+    if MOVE_TO_CPU:
+        MODEL.to('cpu')
+    if UNLOAD_MODEL:
+        MODEL = None
+    torch.cuda.empty_cache()
+    torch.cuda.ipc_collect()
     return waveform_video, seed
 
 
 def ui(**kwargs):
-    with gr.Blocks() as interface:
+    css="""
+    #col-container {max-width: 910px; margin-left: auto; margin-right: auto;}
+    a {text-decoration-line: underline; font-weight: 600;}
+    """
+    with gr.Blocks(title="UnlimitedMusicGen", css=css) as interface:
         gr.Markdown(
             """
             # MusicGen
             This is your private demo for [MusicGen](https://github.com/facebookresearch/audiocraft), a simple and controllable model for music generation
 
             presented at: ["Simple and Controllable Music Generation"](https://huggingface.co/papers/2306.05284)
+            Todo: Working on improved Melody Conditioned Music Generation transitions.
 
             """
         )
@@ -171,16 +226,16 @@ def ui(**kwargs):
                 with gr.Row():
                     title = gr.Textbox(label="Title", value="MusicGen", interactive=True)
                     settings_font = gr.Text(label="Settings Font", value="./assets/arial.ttf", interactive=True)
-                    settings_font_color = gr.ColorPicker(label="Settings Font Color", value="#ffffff", interactive=True)
+                    settings_font_color = gr.ColorPicker(label="Settings Font Color", value="#c87f05", interactive=True)
                 with gr.Row():
                     model = gr.Radio(["melody", "medium", "small", "large"], label="Model", value="melody", interactive=True)
                 with gr.Row():
-                    duration = gr.Slider(minimum=1, maximum=1000, value=10, label="Duration", interactive=True)
+                    duration = gr.Slider(minimum=1, maximum=720, value=10, label="Duration", interactive=True)
                     overlap = gr.Slider(minimum=1, maximum=29, value=5, step=1, label="Overlap", interactive=True)
                     dimension = gr.Slider(minimum=-2, maximum=2, value=2, step=1, label="Dimension", info="determines which direction to add new segements of audio. (1 = stack tracks, 2 = lengthen, -2..0 = ?)", interactive=True)
                 with gr.Row():
-                    topk = gr.Number(label="Top-k", value=250, interactive=True)
-                    topp = gr.Number(label="Top-p", value=0, interactive=True)
+                    topk = gr.Number(label="Top-k", value=250, precision=0, interactive=True)
+                    topp = gr.Number(label="Top-p", value=0, precision=0, interactive=True)
                     temperature = gr.Number(label="Randomness Temperature", value=0.75, precision=None, interactive=True)
                     cfg_coef = gr.Number(label="Classifier Free Guidance", value=5.5, precision=None, interactive=True)
                 with gr.Row():

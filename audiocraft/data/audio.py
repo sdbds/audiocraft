@@ -22,7 +22,7 @@ import torchaudio as ta
 
 import av
 
-from .audio_utils import f32_pcm, i16_pcm, normalize_audio
+from .audio_utils import f32_pcm, i16_pcm, normalize_audio, convert_audio
 
 
 _av_initialized = False
@@ -157,7 +157,7 @@ def audio_write(stem_name: tp.Union[str, Path],
                 rms_headroom_db: float = 18, loudness_headroom_db: float = 14,
                 loudness_compressor: bool = False,
                 log_clipping: bool = True, make_parent_dir: bool = True,
-                add_suffix: bool = True) -> Path:
+                add_suffix: bool = True, channels:int = 1) -> Path:
     """Convenience function for saving audio to disk. Returns the filename the audio was written to.
 
     Args:
@@ -190,6 +190,8 @@ def audio_write(stem_name: tp.Union[str, Path],
     wav = normalize_audio(wav, normalize, strategy, peak_clip_headroom_db,
                           rms_headroom_db, loudness_headroom_db, log_clipping=log_clipping,
                           sample_rate=sample_rate, stem_name=str(stem_name))
+    if channels > 1:
+        wav = convert_audio(wav,sample_rate, sample_rate, channels)
     kwargs: dict = {}
     if format == 'mp3':
         suffix = '.mp3'

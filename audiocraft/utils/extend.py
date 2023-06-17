@@ -11,6 +11,9 @@ import requests
 from io import BytesIO
 from huggingface_hub import hf_hub_download
 
+
+INTERRUPTING = False
+
 def separate_audio_segments(audio, segment_duration=30, overlap=1):
     sr, audio_data = audio[0], audio[1]
 
@@ -65,6 +68,8 @@ def generate_music_segments(text, melody, MODEL, seed, duration:int=10, overlap:
 
     # Iterate over the segments to create list of Meldoy tensors
     for segment_idx in range(total_segments):
+        if INTERRUPTING:
+            return [], duration
         print(f"segment {segment_idx + 1} of {total_segments} \r")
         sr, verse = melody_segments[segment_idx][0], torch.from_numpy(melody_segments[segment_idx][1]).to(MODEL.device).float().t().unsqueeze(0)
 
@@ -77,6 +82,9 @@ def generate_music_segments(text, melody, MODEL, seed, duration:int=10, overlap:
 
     torch.manual_seed(seed)
     for idx, verse in enumerate(melodys):
+        if INTERRUPTING:
+            return output_segments, duration - (segment_duration * len(output_segments))
+            
         print(f"Generating New Melody Segment {idx + 1}: {text}\r")
         if output_segments:
             # If this isn't the first segment, use the last chunk of the previous segment as the input
@@ -162,7 +170,14 @@ def load_font(font_name, font_size=16):
         try:
             font = ImageFont.truetype(font_name, font_size)
         except (FileNotFoundError, OSError):
-            print("Font not found. Trying to download from local assets folder...\n")
+            print("Font not found. Using Hugging Face download..\n")
+
+        if font is None:
+            try:
+                font_path = ImageFont.truetype(hf_hub_download(repo_id=os.environ.get('SPACE_ID', ''), filename="assets/" + font_name, repo_type="space"), encoding="UTF-8")        
+                font = ImageFont.truetype(font_path, font_size)
+            except (FileNotFoundError, OSError):
+                print("Font not found. Trying to download from local assets folder...\n")
         if font is None:
             try:
                 font = ImageFont.truetype("assets/" + font_name, font_size)
@@ -174,14 +189,12 @@ def load_font(font_name, font_size=16):
             req = requests.get(font_name)
             font = ImageFont.truetype(BytesIO(req.content), font_size)       
         except (FileNotFoundError, OSError):
-             print(f"Font found: {font_name} Using Hugging Face download font\n")
+             print(f"Font not found: {font_name} Using default font\n")
 
-    if font is None:
-        try:
-            font = ImageFont.truetype(hf_hub_download("assets", font_name), encoding="UTF-8")        
-        except (FileNotFoundError, OSError):
-            font = ImageFont.load_default()
-            print(f"Font not found: {font_name} Using default font\n")
+    if font:
+        print(f"Font loaded {font.getname()}")
+    else:
+        font = ImageFont.load_default()
     return font
 
 
