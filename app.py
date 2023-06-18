@@ -213,11 +213,11 @@ def ui(**kwargs):
             This is your private demo for [MusicGen](https://github.com/facebookresearch/audiocraft), a simple and controllable model for music generation
 
             presented at: ["Simple and Controllable Music Generation"](https://huggingface.co/papers/2306.05284)
-            Todo: Working on improved Melody Conditioned Music Generation transitions.
+            Todo: Working on improved Melody Conditioned Music Generation transitions and consistency.
 
             """
         )
-        if IS_SHARED_SPACE:
+        if IS_SHARED_SPACE and not torch.cuda.is_available():
             gr.Markdown("""
                 ⚠ This Space doesn't work in this shared UI ⚠
 
