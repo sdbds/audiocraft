@@ -266,27 +266,27 @@ def ui(**kwargs):
             fn=predict,
             examples=[
                 [
-                    "An 80s driving pop song with heavy drums and synth pads in the background",
+                    "4/4 120bpm 320kbps 48khz, An 80s driving pop song with heavy drums and synth pads in the background",
                     "./assets/bach.mp3",
                     "melody"
                 ],
                 [
-                    "A cheerful country song with acoustic guitars",
+                    "4/4 120bpm 320kbps 48khz, A cheerful country song with acoustic guitars",
                     "./assets/bolero_ravel.mp3",
                     "melody"
                 ],
                 [
-                    "90s rock song with electric guitar and heavy drums",
+                    "4/4 120bpm 320kbps 48khz, 90s rock song with electric guitar and heavy drums",
                     None,
                     "medium"
                 ],
                 [
-                    "a light and cheerly EDM track, with syncopated drums, aery pads, and strong emotions",
+                    "4/4 120bpm 320kbps 48khz, a light and cheerly EDM track, with syncopated drums, aery pads, and strong emotions",
                     "./assets/bach.mp3",
                     "melody"
                 ],
                 [
-                    "lofi slow bpm electro chill with organic samples",
+                    "4/4 320kbps 48khz, lofi slow bpm electro chill with organic samples",
                     None,
                     "medium",
                 ],
