@@ -15,6 +15,7 @@ import time
 import warnings
 from audiocraft.models import MusicGen
 from audiocraft.data.audio import audio_write
+from audiocraft.data.audio_utils import apply_fade
 from audiocraft.utils.extend import generate_music_segments, add_settings_to_image, INTERRUPTING
 import numpy as np
 import random
@@ -162,7 +163,20 @@ def predict(model, text, melody, duration, dimension, topk, topp, temperature, c
             output = output_segments[0]
             for i in range(1, len(output_segments)):
                 overlap_samples = overlap * MODEL.sample_rate
-                output = torch.cat([output[:, :, :-overlap_samples], output_segments[i]], dim=dimension)
+                #stack tracks and fade out/in
+                overlapping_output_fadeout = output[:, :, -overlap_samples:]
+                overlapping_output_fadeout = apply_fade(overlapping_output_fadeout,sample_rate=MODEL.sample_rate,duration=overlap,out=True,start=True, curve_end=0.9, current_device=MODEL.device)
+
+                overlapping_output_fadein = output_segments[i][:, :, :overlap_samples]
+                overlapping_output_fadein = apply_fade(overlapping_output_fadein,sample_rate=MODEL.sample_rate,duration=overlap,out=False,start=False, curve_start=0.1, current_device=MODEL.device)
+
+                overlapping_output = (overlapping_output_fadeout + overlapping_output_fadein) / 2
+                print(f" overlap size Fade:{overlapping_output.size()}\n output: {output.size()}\n segment: {output_segments[i].size()}")
+                ##overlapping_output = torch.cat([output[:, :, -overlap_samples:], output_segments[i][:, :, :overlap_samples]], dim=1) #stack tracks
+                ##print(f" overlap size stack:{overlapping_output.size()}\n output: {output.size()}\n segment: {output_segments[i].size()}")
+                #overlapping_output = torch.cat([output[:, :, -overlap_samples:], output_segments[i][:, :, :overlap_samples]], dim=2) #stack tracks
+                #print(f" overlap size cat:{overlapping_output.size()}\n output: {output.size()}\n segment: {output_segments[i].size()}")               
+                output = torch.cat([output[:, :, :-overlap_samples], overlapping_output, output_segments[i][:, :, overlap_samples:]], dim=dimension)
             output = output.detach().cpu().float()[0]
         except Exception as e:
             print(f"Error combining segments: {e}. Using the first segment only.")

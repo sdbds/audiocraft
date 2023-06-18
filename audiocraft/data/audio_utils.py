@@ -172,3 +172,29 @@ def i16_pcm(wav: torch.Tensor) -> torch.Tensor:
     else:
         assert wav.dtype == torch.int16
         return wav
+
+def apply_fade(audio: torch.Tensor, sample_rate, duration=3.0, out=True, start=True, curve_start:float=0.0, curve_end:float=1.0, current_device:str="cpu") -> torch.Tensor:
+    fade_samples = int(sample_rate * duration)  # Number of samples for the fade duration
+    fade_curve = torch.linspace(curve_start, curve_end, fade_samples, device=current_device)  # Generate linear fade curve
+
+    if out:
+        fade_curve = fade_curve.flip(0)  # Reverse the fade curve for fade out
+
+    # Select the portion of the audio to apply the fade
+    if start:
+        audio_fade_section = audio[:, :fade_samples]
+    else:
+        audio_fade_section = audio[:, -fade_samples:]
+
+    # Apply the fade curve to the audio section
+    audio_faded = audio.clone()
+    audio_faded[:, :fade_samples] *= fade_curve.unsqueeze(0)
+    audio_faded[:, -fade_samples:] *= fade_curve.unsqueeze(0)
+
+    # Replace the selected portion of the audio with the faded section
+    if start:
+        audio_faded[:, :fade_samples] = audio_fade_section
+    else:
+        audio_faded[:, -fade_samples:] = audio_fade_section
+
+    return audio_faded
