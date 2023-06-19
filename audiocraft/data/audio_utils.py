@@ -173,7 +173,66 @@ def i16_pcm(wav: torch.Tensor) -> torch.Tensor:
         assert wav.dtype == torch.int16
         return wav
 
+def apply_tafade(audio: torch.Tensor, sample_rate, duration=3.0, out=True, start=True, shape: str = "linear") -> torch.Tensor:
+    """
+    Apply fade-in and/or fade-out effects to the audio tensor.
+
+    Args:
+        audio (torch.Tensor): The input audio tensor of shape (C, L).
+        sample_rate (int): The sample rate of the audio.
+        duration (float, optional): The duration of the fade in seconds. Defaults to 3.0.
+        out (bool, optional): Determines whether to apply fade-in (False) or fade-out (True) effect. Defaults to True.
+        start (bool, optional): Determines whether the fade is applied to the beginning (True) or end (False) of the audio. Defaults to True.
+        shape (str, optional): The shape of the fade. Must be one of: "quarter_sine", "half_sine", "linear", "logarithmic", "exponential". Defaults to "linear".
+
+    Returns:
+        torch.Tensor: The audio tensor with the fade effect applied.
+
+    """
+    fade_samples = int(sample_rate * duration)  # Number of samples for the fade duration
+
+    # Create the fade transform
+    fade_transform = torchaudio.transforms.Fade(fade_in_len=fade_samples, fade_out_len=fade_samples, fade_shape=shape)
+
+    if out:
+        fade_transform.fade_out_len = fade_samples
+        fade_transform.fade_out_shape = shape
+
+    # Select the portion of the audio to apply the fade
+    if start:
+        audio_fade_section = audio[:, :fade_samples]
+    else:
+        audio_fade_section = audio[:, -fade_samples:]
+
+    # Apply the fade transform to the audio section
+    audio_faded = fade_transform(audio)
+
+    # Replace the selected portion of the audio with the faded section
+    if start:
+        audio_faded[:, :fade_samples] = audio_fade_section
+    else:
+        audio_faded[:, -fade_samples:] = audio_fade_section
+
+    return audio_faded
+
 def apply_fade(audio: torch.Tensor, sample_rate, duration=3.0, out=True, start=True, curve_start:float=0.0, curve_end:float=1.0, current_device:str="cpu") -> torch.Tensor:
+    """
+    Apply fade-in and/or fade-out effects to the audio tensor.
+
+    Args:
+        audio (torch.Tensor): The input audio tensor of shape (C, L).
+        sample_rate (int): The sample rate of the audio.
+        duration (float, optional): The duration of the fade in seconds. Defaults to 3.0.
+        out (bool, optional): Determines whether to apply fade-in (False) or fade-out (True) effect. Defaults to True.
+        start (bool, optional): Determines whether the fade is applied to the beginning (True) or end (False) of the audio. Defaults to True.
+        curve_start (float, optional): The starting amplitude of the fade curve. Defaults to 0.0.
+        curve_end (float, optional): The ending amplitude of the fade curve. Defaults to 1.0.
+        current_device (str, optional): The device on which the fade curve tensor should be created. Defaults to "cpu".
+
+    Returns:
+        torch.Tensor: The audio tensor with the fade effect applied.
+
+    """
     fade_samples = int(sample_rate * duration)  # Number of samples for the fade duration
     fade_curve = torch.linspace(curve_start, curve_end, fade_samples, device=current_device)  # Generate linear fade curve
 

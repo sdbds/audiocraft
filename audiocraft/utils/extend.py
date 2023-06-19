@@ -1,3 +1,4 @@
+from tabnanny import verbose
 import torch
 import math
 from audiocraft.models import MusicGen
@@ -54,9 +55,21 @@ def generate_music_segments(text, melody, seed, MODEL, duration:int=10, overlap:
     
     # Calculate the total number of segments
     total_segments = max(math.ceil(duration / segment_duration),1)
+    #calculate duration loss from segment overlap
+    duration_loss = max(total_segments - 1,0) * math.ceil(overlap / 2)
     #calc excess duration
     excess_duration = segment_duration - (total_segments * segment_duration - duration)
-    print(f"total Segments to Generate: {total_segments} for {duration} seconds. Each segment is {segment_duration} seconds. Excess {excess_duration}")
+    print(f"total Segments to Generate: {total_segments} for {duration} seconds. Each segment is {segment_duration} seconds. Excess {excess_duration} Overlap Loss {duration_loss}")
+    duration += duration_loss
+    while excess_duration + duration_loss > segment_duration:
+        total_segments += 1
+        #calculate duration loss from segment overlap
+        duration_loss = max(total_segments - 1,0) * math.ceil(overlap / 2)
+        #calc excess duration
+        excess_duration = segment_duration - (total_segments * segment_duration - duration)
+        print(f"total Segments to Generate: {total_segments} for {duration} seconds. Each segment is {segment_duration} seconds. Excess {excess_duration} Overlap Loss {duration_loss}")
+        if excess_duration + duration_loss > segment_duration:
+            duration += duration_loss
 
     # If melody_segments is shorter than total_segments, repeat the segments until the total_segments is reached
     if len(melody_segments) < total_segments:
@@ -83,24 +96,70 @@ def generate_music_segments(text, melody, seed, MODEL, duration:int=10, overlap:
     torch.manual_seed(seed)
     for idx, verse in enumerate(melodys):
         if INTERRUPTING:
-            return output_segments, duration - (segment_duration * len(output_segments))
+            return output_segments, duration
+
+        print(f'Segment duration: {segment_duration}, duration: {duration}, overlap: {overlap} Overlap Loss: {duration_loss}')
+        # Compensate for the length of final segment
+        if (idx + 1) == len(melodys):
+            print(f'Modify Last verse length, duration: {duration}, overlap: {overlap} Overlap Loss: {duration_loss}')
+            MODEL.set_generation_params(
+                use_sampling=True,
+                top_k=MODEL.generation_params["top_k"],
+                top_p=MODEL.generation_params["top_p"],
+                temperature=MODEL.generation_params["temp"],
+                cfg_coef=MODEL.generation_params["cfg_coef"],
+                duration=duration,
+                two_step_cfg=False,
+                rep_penalty=0.5
+            )
+            try:
+                # get last chunk
+                verse = verse[:, :, -duration*MODEL.sample_rate:]
+                prompt_segment = prompt_segment[:, :, -duration*MODEL.sample_rate:]
+            except:
+                # get first chunk
+                verse = verse[:, :, :duration*MODEL.sample_rate] 
+                prompt_segment = prompt_segment[:, :, :duration*MODEL.sample_rate]
+
+        else:            
+            MODEL.set_generation_params(
+                use_sampling=True,
+                top_k=MODEL.generation_params["top_k"],
+                top_p=MODEL.generation_params["top_p"],
+                temperature=MODEL.generation_params["temp"],
+                cfg_coef=MODEL.generation_params["cfg_coef"],
+                duration=segment_duration,
+                two_step_cfg=False,
+                rep_penalty=0.5
+            )                    
+
+        # Generate a new prompt segment based on the first verse. This will be applied to all segments for consistency
+        if idx == 0:
+            print(f"Generating New Prompt Segment: {text}\r")
+            prompt_segment = MODEL.generate_with_all(
+                descriptions=[text],
+                melody_wavs=verse,
+                sample_rate=sr,
+                progress=False,
+                prompt=None,
+            )            
             
         print(f"Generating New Melody Segment {idx + 1}: {text}\r")
-        if output_segments:
-            # If this isn't the first segment, use the last chunk of the previous segment as the input
-            last_chunk = output_segments[-1][:, :, -overlap*MODEL.sample_rate:]
         output = MODEL.generate_with_all(
             descriptions=[text],
             melody_wavs=verse,
             sample_rate=sr,
             progress=True,
-            prompt=last_chunk if len(last_chunk) > 0 else None,
+            prompt=prompt_segment,
         )
 
         # Append the generated output to the list of segments
         #output_segments.append(output[:, :segment_duration])
         output_segments.append(output)
         print(f"output_segments: {len(output_segments)}: shape: {output.shape} dim {output.dim()}")
+        #track duration
+        if duration > segment_duration:
+            duration -= segment_duration
     return output_segments, excess_duration
 
 def save_image(image):
