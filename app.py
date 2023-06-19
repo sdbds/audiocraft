@@ -84,6 +84,11 @@ def predict(model, text, melody, duration, dimension, topk, topp, temperature, c
     else:
         if MOVE_TO_CPU:
             MODEL.to('cuda')
+    
+    # prevent hacking
+    duration = min(duration, 720)
+    overlap =  min(overlap, 15)
+    # 
 
     output = None
     segment_duration = duration

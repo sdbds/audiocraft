@@ -18,7 +18,7 @@ INTERRUPTING = False
 def separate_audio_segments(audio, segment_duration=30, overlap=1):
     sr, audio_data = audio[0], audio[1]
 
-    total_samples = len(audio_data)
+    total_samples = min(len(audio_data), 25)
     segment_samples = sr * segment_duration
     overlap_samples = sr * overlap
 
