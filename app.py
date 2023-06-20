@@ -252,7 +252,7 @@ def ui(**kwargs):
                     model = gr.Radio(["melody", "medium", "small", "large"], label="Model", value="melody", interactive=True)
                 with gr.Row():
                     duration = gr.Slider(minimum=1, maximum=720, value=10, label="Duration", interactive=True)
-                    overlap = gr.Slider(minimum=1, maximum=15, value=4, step=1, label="Overlap", interactive=True)
+                    overlap = gr.Slider(minimum=2, maximum=14, value=2, step=2, label="Overlap", interactive=True)
                     dimension = gr.Slider(minimum=-2, maximum=2, value=2, step=1, label="Dimension", info="determines which direction to add new segements of audio. (1 = stack tracks, 2 = lengthen, -2..0 = ?)", interactive=True)
                 with gr.Row():
                     topk = gr.Number(label="Top-k", value=250, precision=0, interactive=True)
