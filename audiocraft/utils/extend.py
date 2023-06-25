@@ -18,7 +18,7 @@ INTERRUPTING = False
 def separate_audio_segments(audio, segment_duration=30, overlap=1):
     sr, audio_data = audio[0], audio[1]
 
-    total_samples = min(len(audio_data), 25)
+    total_samples = len(audio_data)
     segment_samples = sr * segment_duration
     overlap_samples = sr * overlap
 
@@ -43,15 +43,16 @@ def separate_audio_segments(audio, segment_duration=30, overlap=1):
     print(f"separate_audio_segments: {len(segments)} segments")
     return segments
 
-def generate_music_segments(text, melody, seed, MODEL, duration:int=10, overlap:int=1, segment_duration:int=30):
+def generate_music_segments(text, melody, seed, MODEL, duration:int=10, overlap:int=1, segment_duration:int=30, prompt_index:int=0):
     # generate audio segments
     melody_segments = separate_audio_segments(melody, segment_duration, 0) 
     
-    # Create a list to store the melody tensors for each segment
+    # Create lists to store the melody tensors for each segment
     melodys = []
     output_segments = []
     last_chunk = []
     text += ", seed=" + str(seed)
+    prompt_segment = None
     
     # Calculate the total number of segments
     total_segments = max(math.ceil(duration / segment_duration),1)
@@ -94,55 +95,63 @@ def generate_music_segments(text, melody, seed, MODEL, duration:int=10, overlap:
         melodys.append(verse)
 
     torch.manual_seed(seed)
+
+    # If user selects a prompt segment, generate a new prompt segment to use on all segments
+    #default to the first segment for prompt conditioning
+    prompt_verse = melodys[0]
+    if prompt_index > 0:
+        # Get a prompt segment from the selected verse, normally the first verse
+        prompt_verse = melodys[prompt_index if prompt_index <= (total_segments - 1) else (total_segments -1)]
+       
+    # set the prompt segment MODEL generation params
+    MODEL.set_generation_params(
+        use_sampling=True,
+        top_k=MODEL.generation_params["top_k"],
+        top_p=MODEL.generation_params["top_p"],
+        temperature=MODEL.generation_params["temp"],
+        cfg_coef=MODEL.generation_params["cfg_coef"],
+        duration=segment_duration,
+        two_step_cfg=False,
+        rep_penalty=0.5
+    )
+    # Generate a new prompt segment. This will be applied to all segments for consistency
+    print(f"Generating New Prompt Segment: {text} from verse {prompt_index}\r")
+    prompt_segment = MODEL.generate_with_all(
+        descriptions=[text],
+        melody_wavs=prompt_verse,
+        sample_rate=sr,
+        progress=False,
+        prompt=None,
+    )       
+
     for idx, verse in enumerate(melodys):
         if INTERRUPTING:
             return output_segments, duration
 
         print(f'Segment duration: {segment_duration}, duration: {duration}, overlap: {overlap} Overlap Loss: {duration_loss}')
         # Compensate for the length of final segment
-        if (idx + 1) == len(melodys):
-            print(f'Modify Last verse length, duration: {duration}, overlap: {overlap} Overlap Loss: {duration_loss}')
+        if ((idx + 1) == len(melodys)) or (duration < segment_duration):
+            mod_duration = max(min(duration, segment_duration),1)
+            print(f'Modify verse length, duration: {duration}, overlap: {overlap} Overlap Loss: {duration_loss} to mod duration: {mod_duration}')
             MODEL.set_generation_params(
                 use_sampling=True,
                 top_k=MODEL.generation_params["top_k"],
                 top_p=MODEL.generation_params["top_p"],
                 temperature=MODEL.generation_params["temp"],
                 cfg_coef=MODEL.generation_params["cfg_coef"],
-                duration=duration,
+                duration=mod_duration,
                 two_step_cfg=False,
                 rep_penalty=0.5
             )
             try:
                 # get last chunk
-                verse = verse[:, :, -duration*MODEL.sample_rate:]
-                prompt_segment = prompt_segment[:, :, -duration*MODEL.sample_rate:]
+                verse = verse[:, :, -mod_duration*MODEL.sample_rate:]
+                prompt_segment = prompt_segment[:, :, -mod_duration*MODEL.sample_rate:]
             except:
                 # get first chunk
-                verse = verse[:, :, :duration*MODEL.sample_rate] 
-                prompt_segment = prompt_segment[:, :, :duration*MODEL.sample_rate]
-
-        else:            
-            MODEL.set_generation_params(
-                use_sampling=True,
-                top_k=MODEL.generation_params["top_k"],
-                top_p=MODEL.generation_params["top_p"],
-                temperature=MODEL.generation_params["temp"],
-                cfg_coef=MODEL.generation_params["cfg_coef"],
-                duration=segment_duration,
-                two_step_cfg=False,
-                rep_penalty=0.5
-            )                    
-
-        # Generate a new prompt segment based on the first verse. This will be applied to all segments for consistency
-        if idx == 0:
-            print(f"Generating New Prompt Segment: {text}\r")
-            prompt_segment = MODEL.generate_with_all(
-                descriptions=[text],
-                melody_wavs=verse,
-                sample_rate=sr,
-                progress=False,
-                prompt=None,
-            )            
+                verse = verse[:, :, :mod_duration*MODEL.sample_rate] 
+                prompt_segment = prompt_segment[:, :, :mod_duration*MODEL.sample_rate]
+      
             
         print(f"Generating New Melody Segment {idx + 1}: {text}\r")
         output = MODEL.generate_with_all(
@@ -152,6 +161,10 @@ def generate_music_segments(text, melody, seed, MODEL, duration:int=10, overlap:
             progress=True,
             prompt=prompt_segment,
         )
+        # If user selects a prompt segment, use the prompt segment for all segments
+        # Otherwise, use the previous segment as the prompt
+        if prompt_index < 0:
+            prompt_segment = output
 
         # Append the generated output to the list of segments
         #output_segments.append(output[:, :segment_duration])
