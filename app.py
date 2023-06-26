@@ -85,7 +85,7 @@ def load_melody_filepath(melody_filepath, title):
     #$Union[str, os.PathLike]    
     symbols = ['_', '.', '-']
     if melody_filepath is None:
-        return  None, title
+        return  None, title    
     
     if (title is None) or ("MusicGen" in title) or (title == ""):
         melody_name, melody_extension = get_filename_from_filepath(melody_filepath)
@@ -114,7 +114,9 @@ def load_melody(melody, prompt_index):
 def predict(model, text, melody, melody_filepath, duration, dimension, topk, topp, temperature, cfg_coef, background, title, settings_font, settings_font_color, seed, overlap=1, prompt_index = 0, include_title = True, include_settings = True):
     global MODEL, INTERRUPTED, INTERRUPTING, MOVE_TO_CPU
     output_segments = None
-    melody_name, melody_extension = get_filename_from_filepath(melody_filepath)
+    melody_name = "Not Used"
+    if melody_filepath:
+        melody_name, melody_extension = get_filename_from_filepath(melody_filepath)
     INTERRUPTED = False
     INTERRUPTING = False
     if temperature < 0:
@@ -237,7 +239,7 @@ def predict(model, text, melody, melody_filepath, duration, dimension, topk, top
         output = output.detach().cpu().float()[0]
 
     with NamedTemporaryFile("wb", suffix=".wav", delete=False) as file:        
-        video_description = f"{text}\n Duration: {str(initial_duration)} Dimension: {dimension}\n Top-k:{topk} Top-p:{topp}\n Randomness:{temperature}\n cfg:{cfg_coef} overlap: {overlap}\n Seed: {seed}\n Model: {model}\n Melody Condition:{melody_name}\n Prompt index: {prompt_index}"
+        video_description = f"{text}\n Duration: {str(initial_duration)} Dimension: {dimension}\n Top-k:{topk} Top-p:{topp}\n Randomness:{temperature}\n cfg:{cfg_coef} overlap: {overlap}\n Seed: {seed}\n Model: {model}\n Melody Condition:{melody_name}\n Sample Segment: {prompt_index}"
         if include_settings or include_title:
             background = add_settings_to_image(title if include_title else "", video_description if include_settings else "", background_path=background, font=settings_font, font_color=settings_font_color)
         audio_write(
