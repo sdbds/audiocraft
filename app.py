@@ -102,13 +102,13 @@ def load_melody_filepath(melody_filepath, title):
 def load_melody(melody, prompt_index):
     # get melody length in number of segments and modify the UI
     if melody is None:
-        return  prompt_index
+        return  gr.Slider.update(maximum=0, value=0) , gr.Radio.update(value="melody", interactive=True)
     sr, melody_data = melody[0], melody[1]
     segment_samples = sr * 30
     total_melodys = max(min((len(melody_data) // segment_samples) - 1, 25), 0) 
     print(f"Melody length: {len(melody_data)}, Melody segments: {total_melodys}\n")
     MAX_PROMPT_INDEX = total_melodys
-    return  gr.Slider.update(maximum=MAX_PROMPT_INDEX, value=0, visible=True)
+    return  gr.Slider.update(maximum=MAX_PROMPT_INDEX, value=0), gr.Radio.update(value="melody", interactive=False)
          
 
 def predict(model, text, melody, melody_filepath, duration, dimension, topk, topp, temperature, cfg_coef, background, title, settings_font, settings_font_color, seed, overlap=1, prompt_index = 0, include_title = True, include_settings = True):
@@ -318,7 +318,7 @@ def ui(**kwargs):
                 output = gr.Video(label="Generated Music")
                 seed_used = gr.Number(label='Seed used', value=-1, interactive=False)
 
-        melody_filepath.change(load_melody_filepath, inputs=[melody_filepath, title], outputs=[melody, title], api_name="melody_filepath_change").success(load_melody, inputs=[melody, prompt_index], outputs=[prompt_index])
+        melody_filepath.change(load_melody_filepath, inputs=[melody_filepath, title], outputs=[melody, title], api_name="melody_filepath_change").success(load_melody, inputs=[melody, prompt_index], outputs=[prompt_index, model])
         melody.change(load_melody, inputs=[melody, prompt_index], outputs=[prompt_index], api_name="melody_change")
         reuse_seed.click(fn=lambda x: x, inputs=[seed_used], outputs=[seed], queue=False, api_name="reuse_seed")
         submit.click(predict, inputs=[model, text, melody, melody_filepath, duration, dimension, topk, topp, temperature, cfg_coef, background, title, settings_font, settings_font_color, seed, overlap, prompt_index, include_title, include_settings], outputs=[output, seed_used], api_name="submit")
