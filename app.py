@@ -96,8 +96,8 @@ def load_melody_filepath(melody_filepath, title):
     # get melody filename
     #$Union[str, os.PathLike]    
     symbols = ['_', '.', '-']
-    if melody_filepath is None:
-        return  None, title, gr.Slider.update(maximum=0, value=0) , gr.Radio.update(value="melody", interactive=True)   
+    if (melody_filepath is None) or (melody_filepath == ""):
+        return title, gr.Slider.update(maximum=0, value=0) , gr.Radio.update(value="melody", interactive=True)   
     
     if (title is None) or ("MusicGen" in title) or (title == ""):
         melody_name, melody_extension = get_filename_from_filepath(melody_filepath)
@@ -340,7 +340,7 @@ def ui(**kwargs):
                 seed_used = gr.Number(label='Seed used', value=-1, interactive=False)
 
         radio.change(toggle_audio_src, radio, [melody_filepath], queue=False, show_progress=False)
-        melody_filepath.change(load_melody_filepath, inputs=[melody_filepath, title], outputs=[title, prompt_index , model], api_name="melody_filepath_change")        
+        melody_filepath.change(load_melody_filepath, inputs=[melody_filepath, title], outputs=[title, prompt_index , model], api_name="melody_filepath_change")
         reuse_seed.click(fn=lambda x: x, inputs=[seed_used], outputs=[seed], queue=False, api_name="reuse_seed")
         submit.click(predict, inputs=[model, text,melody_filepath, duration, dimension, topk, topp, temperature, cfg_coef, background, title, settings_font, settings_font_color, seed, overlap, prompt_index, include_title, include_settings, harmony_only], outputs=[output, wave_file, seed_used], api_name="submit")
         gr.Examples(
