@@ -173,7 +173,7 @@ def i16_pcm(wav: torch.Tensor) -> torch.Tensor:
         assert wav.dtype == torch.int16
         return wav
 
-def apply_tafade(audio: torch.Tensor, sample_rate, duration=3.0, out=True, start=True, shape: str = "linear") -> torch.Tensor:
+def apply_tafade(audio: torch.Tensor, sample_rate, duration=3.0, out=True, start=True, shape: str = "linear", stem_name: tp.Optional[str] = None) -> torch.Tensor:
     """
     Apply fade-in and/or fade-out effects to the audio tensor.
 
@@ -192,11 +192,12 @@ def apply_tafade(audio: torch.Tensor, sample_rate, duration=3.0, out=True, start
     fade_samples = int(sample_rate * duration)  # Number of samples for the fade duration
 
     # Create the fade transform
-    fade_transform = torchaudio.transforms.Fade(fade_in_len=fade_samples, fade_out_len=fade_samples, fade_shape=shape)
+    fade_transform = torchaudio.transforms.Fade(fade_in_len=0, fade_out_len=0, fade_shape=shape)
 
     if out:
         fade_transform.fade_out_len = fade_samples
-        fade_transform.fade_out_shape = shape
+    else:
+        fade_transform.fade_in_len = fade_samples        
 
     # Select the portion of the audio to apply the fade
     if start:
@@ -213,9 +214,12 @@ def apply_tafade(audio: torch.Tensor, sample_rate, duration=3.0, out=True, start
     else:
         audio_faded[:, -fade_samples:] = audio_fade_section
 
-    return audio_faded
+    wav = normalize_loudness(audio_faded,sample_rate, loudness_headroom_db=18, loudness_compressor=True)
+    _clip_wav(wav, log_clipping=False, stem_name=stem_name)
+    return wav
 
-def apply_fade(audio: torch.Tensor, sample_rate, duration=3.0, out=True, start=True, curve_start:float=0.0, curve_end:float=1.0, current_device:str="cpu") -> torch.Tensor:
+
+def apply_fade(audio: torch.Tensor, sample_rate, duration=3.0, out=True, start=True, curve_start:float=0.0, curve_end:float=1.0, current_device:str="cpu", stem_name: tp.Optional[str] = None) -> torch.Tensor:
     """
     Apply fade-in and/or fade-out effects to the audio tensor.
 
@@ -256,4 +260,6 @@ def apply_fade(audio: torch.Tensor, sample_rate, duration=3.0, out=True, start=T
     else:
         audio_faded[:, -fade_samples:] = audio_fade_section
 
-    return audio_faded
+    wav = normalize_loudness(audio_faded,sample_rate, loudness_headroom_db=18, loudness_compressor=True)
+    _clip_wav(wav, log_clipping=False, stem_name=stem_name)
+    return wav

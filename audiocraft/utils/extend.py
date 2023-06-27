@@ -11,6 +11,7 @@ import textwrap
 import requests
 from io import BytesIO
 from huggingface_hub import hf_hub_download
+import librosa
 
 
 INTERRUPTING = False
@@ -43,7 +44,7 @@ def separate_audio_segments(audio, segment_duration=30, overlap=1):
     print(f"separate_audio_segments: {len(segments)} segments")
     return segments
 
-def generate_music_segments(text, melody, seed, MODEL, duration:int=10, overlap:int=1, segment_duration:int=30, prompt_index:int=0):
+def generate_music_segments(text, melody, seed, MODEL, duration:int=10, overlap:int=1, segment_duration:int=30, prompt_index:int=0, harmony_only:bool= False):
     # generate audio segments
     melody_segments = separate_audio_segments(melody, segment_duration, 0) 
     
@@ -85,12 +86,23 @@ def generate_music_segments(text, melody, seed, MODEL, duration:int=10, overlap:
         if INTERRUPTING:
             return [], duration
         print(f"segment {segment_idx + 1} of {total_segments} \r")
-        sr, verse = melody_segments[segment_idx][0], torch.from_numpy(melody_segments[segment_idx][1]).to(MODEL.device).float().t().unsqueeze(0)
+
+        if harmony_only:
+            # REMOVE PERCUSION FROM MELODY
+            # Apply HPSS using librosa
+            verse_harmonic, verse_percussive = librosa.effects.hpss(melody_segments[segment_idx][1])
+            # Convert the separated components back to torch.Tensor
+            #harmonic_tensor = torch.from_numpy(verse_harmonic)
+            #percussive_tensor = torch.from_numpy(verse_percussive)
+            sr, verse = melody_segments[segment_idx][0], torch.from_numpy(verse_harmonic).to(MODEL.device).float().t().unsqueeze(0)
+        else:
+            sr, verse = melody_segments[segment_idx][0], torch.from_numpy(melody_segments[segment_idx][1]).to(MODEL.device).float().t().unsqueeze(0)
 
         print(f"shape:{verse.shape} dim:{verse.dim()}")
         if verse.dim() == 2:
             verse = verse[None]
         verse = verse[..., :int(sr * MODEL.lm.cfg.dataset.segment_duration)]
+
         # Append the segment to the melodys list
         melodys.append(verse)
 

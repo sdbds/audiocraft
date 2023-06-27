@@ -19,8 +19,9 @@ from audiocraft.data.audio_utils import apply_fade, apply_tafade
 from audiocraft.utils.extend import generate_music_segments, add_settings_to_image, INTERRUPTING
 import numpy as np
 import random
-from pathlib import Path
-from typing import List, Union
+#from pathlib import Path
+#from typing import List, Union
+import librosa
 
 MODEL = None
 MODELS = None
@@ -80,12 +81,18 @@ def get_filename_from_filepath(filepath):
     file_base, file_extension = os.path.splitext(file_name)
     return file_base, file_extension
 
+def get_melody(melody_filepath):
+        audio_data= list(librosa.load(melody_filepath, sr=None))
+        audio_data[0], audio_data[1] = audio_data[1], audio_data[0]
+        melody = tuple(audio_data)
+        return melody
+
 def load_melody_filepath(melody_filepath, title):
     # get melody filename
     #$Union[str, os.PathLike]    
     symbols = ['_', '.', '-']
     if melody_filepath is None:
-        return  None, title    
+        return  None, title, gr.Slider.update(maximum=0, value=0) , gr.Radio.update(value="melody", interactive=True)   
     
     if (title is None) or ("MusicGen" in title) or (title == ""):
         melody_name, melody_extension = get_filename_from_filepath(melody_filepath)
@@ -97,26 +104,25 @@ def load_melody_filepath(melody_filepath, title):
 
     print(f"Melody name: {melody_name}, Melody Filepath: {melody_filepath}\n")
 
-    return  gr.Audio.update(value=melody_filepath), gr.Textbox.update(value=melody_name)
-
-def load_melody(melody, prompt_index):
     # get melody length in number of segments and modify the UI
-    if melody is None:
-        return  gr.Slider.update(maximum=0, value=0) , gr.Radio.update(value="melody", interactive=True)
+    melody = get_melody(melody_filepath)
     sr, melody_data = melody[0], melody[1]
     segment_samples = sr * 30
-    total_melodys = max(min((len(melody_data) // segment_samples) - 1, 25), 0) 
+    total_melodys = max(min((len(melody_data) // segment_samples), 25), 0) 
     print(f"Melody length: {len(melody_data)}, Melody segments: {total_melodys}\n")
-    MAX_PROMPT_INDEX = total_melodys
-    return  gr.Slider.update(maximum=MAX_PROMPT_INDEX, value=0), gr.Radio.update(value="melody", interactive=False)
-         
+    MAX_PROMPT_INDEX = total_melodys   
 
-def predict(model, text, melody, melody_filepath, duration, dimension, topk, topp, temperature, cfg_coef, background, title, settings_font, settings_font_color, seed, overlap=1, prompt_index = 0, include_title = True, include_settings = True):
+    return  gr.Textbox.update(value=melody_name), gr.Slider.update(maximum=MAX_PROMPT_INDEX, value=0), gr.Radio.update(value="melody", interactive=False)
+
+def predict(model, text, melody_filepath, duration, dimension, topk, topp, temperature, cfg_coef, background, title, settings_font, settings_font_color, seed, overlap=1, prompt_index = 0, include_title = True, include_settings = True, harmony_only = False):
     global MODEL, INTERRUPTED, INTERRUPTING, MOVE_TO_CPU
     output_segments = None
     melody_name = "Not Used"
+    melody = None
     if melody_filepath:
         melody_name, melody_extension = get_filename_from_filepath(melody_filepath)
+        melody = get_melody(melody_filepath)
+
     INTERRUPTED = False
     INTERRUPTING = False
     if temperature < 0:
@@ -173,7 +179,7 @@ def predict(model, text, melody, melody_filepath, duration, dimension, topk, top
         if melody:
             # todo return excess duration, load next model and continue in loop structure building up output_segments
             if duration > MODEL.lm.cfg.dataset.segment_duration:
-                output_segments, duration = generate_music_segments(text, melody, seed, MODEL, duration, overlap, MODEL.lm.cfg.dataset.segment_duration, prompt_index)
+                output_segments, duration = generate_music_segments(text, melody, seed, MODEL, duration, overlap, MODEL.lm.cfg.dataset.segment_duration, prompt_index, harmony_only=False)
             else:
                 # pure original code
                 sr, melody = melody[0], torch.from_numpy(melody[1]).to(MODEL.device).float().t().unsqueeze(0)
@@ -217,12 +223,12 @@ def predict(model, text, melody, melody_filepath, duration, dimension, topk, top
                 overlap_samples = overlap * MODEL.sample_rate
                 #stack tracks and fade out/in
                 overlapping_output_fadeout = output[:, :, -overlap_samples:]
-                overlapping_output_fadeout = apply_fade(overlapping_output_fadeout,sample_rate=MODEL.sample_rate,duration=overlap,out=True,start=True, curve_end=0.0, current_device=MODEL.device)
-                #overlapping_output_fadeout = apply_tafade(overlapping_output_fadeout,sample_rate=MODEL.sample_rate,duration=overlap,out=True,start=True,shape="exponential")
+                #overlapping_output_fadeout = apply_fade(overlapping_output_fadeout,sample_rate=MODEL.sample_rate,duration=overlap,out=True,start=True, curve_end=0.0, current_device=MODEL.device)
+                overlapping_output_fadeout = apply_tafade(overlapping_output_fadeout,sample_rate=MODEL.sample_rate,duration=overlap,out=True,start=True,shape="linear")
 
                 overlapping_output_fadein = output_segments[i][:, :, :overlap_samples]
-                overlapping_output_fadein = apply_fade(overlapping_output_fadein,sample_rate=MODEL.sample_rate,duration=overlap,out=False,start=False, curve_start=0.0, current_device=MODEL.device)
-                #overlapping_output_fadein = apply_tafade(overlapping_output_fadein,sample_rate=MODEL.sample_rate,duration=overlap,out=False,start=False, shape="linear")
+                #overlapping_output_fadein = apply_fade(overlapping_output_fadein,sample_rate=MODEL.sample_rate,duration=overlap,out=False,start=False, curve_start=0.0, current_device=MODEL.device)
+                overlapping_output_fadein = apply_tafade(overlapping_output_fadein,sample_rate=MODEL.sample_rate,duration=overlap,out=False,start=False, shape="linear")
 
                 overlapping_output = torch.cat([overlapping_output_fadeout[:, :, :-(overlap_samples // 2)], overlapping_output_fadein],dim=2)
                 print(f" overlap size Fade:{overlapping_output.size()}\n output: {output.size()}\n segment: {output_segments[i].size()}")
@@ -244,7 +250,7 @@ def predict(model, text, melody, melody_filepath, duration, dimension, topk, top
             background = add_settings_to_image(title if include_title else "", video_description if include_settings else "", background_path=background, font=settings_font, font_color=settings_font_color)
         audio_write(
             file.name, output, MODEL.sample_rate, strategy="loudness",
-            loudness_headroom_db=18, loudness_compressor=True, add_suffix=False, channels=2)
+            loudness_headroom_db=18, loudness_compressor=True, add_suffix=False, channels=2)        
         waveform_video = make_waveform(file.name,bg_image=background, bar_count=45)
     if MOVE_TO_CPU:
         MODEL.to('cpu')
@@ -252,13 +258,12 @@ def predict(model, text, melody, melody_filepath, duration, dimension, topk, top
         MODEL = None
     torch.cuda.empty_cache()
     torch.cuda.ipc_collect()
-    return waveform_video, seed
+    return waveform_video, file.name, seed
 
 
 def ui(**kwargs):
     css="""
-    #col-container {max-width: 910px; margin-left: auto; margin-right: auto;}
-    #aud-melody {height: 0; width:0; visibility: hidden;}
+    #col-container {max-width: 910px; margin-left: auto; margin-right: auto;}    
     a {text-decoration-line: underline; font-weight: 600;}
     """
     with gr.Blocks(title="UnlimitedMusicGen", css=css) as interface:
@@ -283,47 +288,49 @@ def ui(**kwargs):
         with gr.Row():
             with gr.Column():
                 with gr.Row():
-                    text = gr.Text(label="Prompt Text", interactive=True, value="4/4 100bpm 320kbps 48khz, Industrial/Electronic Soundtrack, Dark, Intense, Sci-Fi")
                     with gr.Column():
-                        melody_filepath = gr.Audio(source="upload", type="filepath", label="Melody Condition (optional)", interactive=True)
-                        melody = gr.Audio(source="upload", type="numpy", label="Melody Condition (optional)", interactive=True, visible=True, elem_id="aud-melody")#.style("display: none;height: 0; width:0;")
+                        text = gr.Text(label="Prompt Text", interactive=True, value="4/4 100bpm 320kbps 48khz, Industrial/Electronic Soundtrack, Dark, Intense, Sci-Fi")
+                        duration = gr.Slider(minimum=1, maximum=720, value=10, label="Duration", interactive=True)
+                        model = gr.Radio(["melody", "medium", "small", "large"], label="Model", value="melody", interactive=True)
+                    with gr.Column():
+                        melody_filepath = gr.Audio(source="upload", type="filepath", label="Melody Condition (optional)", interactive=True)                        
                         prompt_index = gr.Slider(label="Melody Condition Sample Segment", minimum=-1, maximum=MAX_PROMPT_INDEX, step=1, value=0, interactive=True, info="Which 30 second segment to condition with, - 1 condition each segment independantly")                        
+                        harmony_only = gr.Radio(label="Harmony Only",choices=["No", "Yes"], value="No", interactive=True, info="Remove Drums?")
                 with gr.Row():
                     submit = gr.Button("Submit")
                     # Adapted from https://github.com/rkfg/audiocraft/blob/long/app.py, MIT license.
                     _ = gr.Button("Interrupt").click(fn=interrupt, queue=False)
-                with gr.Row():
-                    background= gr.Image(value="./assets/background.png", source="upload", label="Background", shape=(768,512), type="filepath", interactive=True)
-                    with gr.Column():
-                        include_title = gr.Checkbox(label="Add Title", value=True, interactive=True)
-                        include_settings = gr.Checkbox(label="Add Settings to background", value=True, interactive=True)
-                with gr.Row():
-                    title = gr.Textbox(label="Title", value="MusicGen", interactive=True)
-                    settings_font = gr.Text(label="Settings Font", value="./assets/arial.ttf", interactive=True)
-                    settings_font_color = gr.ColorPicker(label="Settings Font Color", value="#c87f05", interactive=True)
-                with gr.Row():
-                    model = gr.Radio(["melody", "medium", "small", "large"], label="Model", value="melody", interactive=True)
-                with gr.Row():
-                    duration = gr.Slider(minimum=1, maximum=720, value=10, label="Duration", interactive=True)
-                    overlap = gr.Slider(minimum=1, maximum=15, value=3, step=1, label="Overlap", interactive=True)
-                    dimension = gr.Slider(minimum=-2, maximum=2, value=2, step=1, label="Dimension", info="determines which direction to add new segements of audio. (1 = stack tracks, 2 = lengthen, -2..0 = ?)", interactive=True)
-                with gr.Row():
-                    topk = gr.Number(label="Top-k", value=250, precision=0, interactive=True)
-                    topp = gr.Number(label="Top-p", value=0, precision=0, interactive=True)
-                    temperature = gr.Number(label="Randomness Temperature", value=0.75, precision=None, interactive=True)
-                    cfg_coef = gr.Number(label="Classifier Free Guidance", value=5.5, precision=None, interactive=True)
-                with gr.Row():
-                    seed = gr.Number(label="Seed", value=-1, precision=0, interactive=True)
-                    gr.Button('\U0001f3b2\ufe0f').style(full_width=False).click(fn=lambda: -1, outputs=[seed], queue=False)
-                    reuse_seed = gr.Button('\u267b\ufe0f').style(full_width=False)
+                with gr.Accordion("Video", open=False):
+                    with gr.Row():
+                        background= gr.Image(value="./assets/background.png", source="upload", label="Background", shape=(768,512), type="filepath", interactive=True)
+                        with gr.Column():
+                            include_title = gr.Checkbox(label="Add Title", value=True, interactive=True)
+                            include_settings = gr.Checkbox(label="Add Settings to background", value=True, interactive=True)
+                    with gr.Row():
+                        title = gr.Textbox(label="Title", value="MusicGen", interactive=True)
+                        settings_font = gr.Text(label="Settings Font", value="./assets/arial.ttf", interactive=True)
+                        settings_font_color = gr.ColorPicker(label="Settings Font Color", value="#c87f05", interactive=True)
+                with gr.Accordion("Expert", open=False):
+                    with gr.Row():
+                        overlap = gr.Slider(minimum=1, maximum=15, value=2, step=1, label="Verse Overlap", interactive=True)
+                        dimension = gr.Slider(minimum=-2, maximum=2, value=2, step=1, label="Dimension", info="determines which direction to add new segements of audio. (1 = stack tracks, 2 = lengthen, -2..0 = ?)", interactive=True)
+                    with gr.Row():
+                        topk = gr.Number(label="Top-k", value=280, precision=0, interactive=True)
+                        topp = gr.Number(label="Top-p", value=1450, precision=0, interactive=True)
+                        temperature = gr.Number(label="Randomness Temperature", value=0.75, precision=None, interactive=True)
+                        cfg_coef = gr.Number(label="Classifier Free Guidance", value=8.5, precision=None, interactive=True)
+                    with gr.Row():
+                        seed = gr.Number(label="Seed", value=-1, precision=0, interactive=True)
+                        gr.Button('\U0001f3b2\ufe0f').style(full_width=False).click(fn=lambda: -1, outputs=[seed], queue=False)
+                        reuse_seed = gr.Button('\u267b\ufe0f').style(full_width=False)
             with gr.Column() as c:
                 output = gr.Video(label="Generated Music")
+                wave_file = gr.File(label=".wav file", elem_id="output_wavefile", interactive=True)
                 seed_used = gr.Number(label='Seed used', value=-1, interactive=False)
 
-        melody_filepath.change(load_melody_filepath, inputs=[melody_filepath, title], outputs=[melody, title], api_name="melody_filepath_change").success(load_melody, inputs=[melody, prompt_index], outputs=[prompt_index, model])
-        melody.change(load_melody, inputs=[melody, prompt_index], outputs=[prompt_index], api_name="melody_change")
+        melody_filepath.change(load_melody_filepath, inputs=[melody_filepath, title], outputs=[title, prompt_index , model], api_name="melody_filepath_change")        
         reuse_seed.click(fn=lambda x: x, inputs=[seed_used], outputs=[seed], queue=False, api_name="reuse_seed")
-        submit.click(predict, inputs=[model, text, melody, melody_filepath, duration, dimension, topk, topp, temperature, cfg_coef, background, title, settings_font, settings_font_color, seed, overlap, prompt_index, include_title, include_settings], outputs=[output, seed_used], api_name="submit")
+        submit.click(predict, inputs=[model, text,melody_filepath, duration, dimension, topk, topp, temperature, cfg_coef, background, title, settings_font, settings_font_color, seed, overlap, prompt_index, include_title, include_settings, harmony_only], outputs=[output, wave_file, seed_used], api_name="submit")
         gr.Examples(
             fn=predict,
             examples=[
@@ -353,7 +360,7 @@ def ui(**kwargs):
                     "medium",
                 ],
             ],
-            inputs=[text, melody, model],
+            inputs=[text, melody_filepath, model],
             outputs=[output]
         )
         gr.Markdown(
