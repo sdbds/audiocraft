@@ -38,6 +38,11 @@ def interrupt():
     global INTERRUPTING
     INTERRUPTING = True
 
+def toggle_audio_src(choice):
+    if choice == "mic":
+        return gr.update(source="microphone", value=None, label="Microphone")
+    else:
+        return gr.update(source="upload", value=None, label="File")
 
 def make_waveform(*args, **kwargs):
     # Further remove some warnings.
@@ -265,6 +270,9 @@ def ui(**kwargs):
     css="""
     #col-container {max-width: 910px; margin-left: auto; margin-right: auto;}    
     a {text-decoration-line: underline; font-weight: 600;}
+    #btn-generate {background-image:linear-gradient(to right bottom, rgb(157, 255, 157), rgb(229, 255, 235));}
+    #btn-generate:hover {background-image:linear-gradient(to right bottom, rgb(229, 255, 229), rgb(255, 255, 255));}
+    #btn-generate:active {background-image:linear-gradient(to right bottom, rgb(229, 255, 235), rgb(157, 255, 157));}
     """
     with gr.Blocks(title="UnlimitedMusicGen", css=css) as interface:
         gr.Markdown(
@@ -288,18 +296,21 @@ def ui(**kwargs):
         with gr.Row():
             with gr.Column():
                 with gr.Row():
-                    with gr.Column():
-                        text = gr.Text(label="Prompt Text", interactive=True, value="4/4 100bpm 320kbps 48khz, Industrial/Electronic Soundtrack, Dark, Intense, Sci-Fi")
+                    text = gr.Text(label="Describe your music", interactive=True, value="4/4 100bpm 320kbps 48khz, Industrial/Electronic Soundtrack, Dark, Intense, Sci-Fi")
+                    with gr.Column():                        
                         duration = gr.Slider(minimum=1, maximum=720, value=10, label="Duration", interactive=True)
-                        model = gr.Radio(["melody", "medium", "small", "large"], label="Model", value="melody", interactive=True)
-                    with gr.Column():
-                        melody_filepath = gr.Audio(source="upload", type="filepath", label="Melody Condition (optional)", interactive=True)                        
-                        prompt_index = gr.Slider(label="Melody Condition Sample Segment", minimum=-1, maximum=MAX_PROMPT_INDEX, step=1, value=0, interactive=True, info="Which 30 second segment to condition with, - 1 condition each segment independantly")                        
-                        harmony_only = gr.Radio(label="Harmony Only",choices=["No", "Yes"], value="No", interactive=True, info="Remove Drums?")
+                        model = gr.Radio(["melody", "medium", "small", "large"], label="AI Model", value="melody", interactive=True)
                 with gr.Row():
-                    submit = gr.Button("Submit")
+                    submit = gr.Button("Generate", elem_id="btn-generate")
                     # Adapted from https://github.com/rkfg/audiocraft/blob/long/app.py, MIT license.
-                    _ = gr.Button("Interrupt").click(fn=interrupt, queue=False)
+                    _ = gr.Button("Interrupt", elem_id="btn-interrupt").click(fn=interrupt, queue=False)
+                with gr.Row():
+                    with gr.Column():                        
+                        melody_filepath = gr.Audio(source="upload", type="filepath", label="Melody Condition (optional)", interactive=True, elem_id="melody-input")
+                        harmony_only = gr.Radio(label="Use Harmony Only",choices=["No", "Yes"], value="No", interactive=True, info="Remove Drums?")
+                    with gr.Column():
+                        radio = gr.Radio(["file", "mic"], value="file", label="Condition on a melody (optional) File or Mic")
+                        prompt_index = gr.Slider(label="Melody Condition Sample Segment", minimum=-1, maximum=MAX_PROMPT_INDEX, step=1, value=0, interactive=True, info="Which 30 second segment to condition with, - 1 condition each segment independantly")                                                
                 with gr.Accordion("Video", open=False):
                     with gr.Row():
                         background= gr.Image(value="./assets/background.png", source="upload", label="Background", shape=(768,512), type="filepath", interactive=True)
@@ -328,6 +339,7 @@ def ui(**kwargs):
                 wave_file = gr.File(label=".wav file", elem_id="output_wavefile", interactive=True)
                 seed_used = gr.Number(label='Seed used', value=-1, interactive=False)
 
+        radio.change(toggle_audio_src, radio, [melody_filepath], queue=False, show_progress=False)
         melody_filepath.change(load_melody_filepath, inputs=[melody_filepath, title], outputs=[title, prompt_index , model], api_name="melody_filepath_change")        
         reuse_seed.click(fn=lambda x: x, inputs=[seed_used], outputs=[seed], queue=False, api_name="reuse_seed")
         submit.click(predict, inputs=[model, text,melody_filepath, duration, dimension, topk, topp, temperature, cfg_coef, background, title, settings_font, settings_font_color, seed, overlap, prompt_index, include_title, include_settings, harmony_only], outputs=[output, wave_file, seed_used], api_name="submit")
@@ -337,30 +349,35 @@ def ui(**kwargs):
                 [
                     "4/4 120bpm 320kbps 48khz, An 80s driving pop song with heavy drums and synth pads in the background",
                     "./assets/bach.mp3",
-                    "melody"
+                    "melody",
+                    "80s Pop Synth"
                 ],
                 [
                     "4/4 120bpm 320kbps 48khz, A cheerful country song with acoustic guitars",
                     "./assets/bolero_ravel.mp3",
-                    "melody"
+                    "melody",
+                    "Country Guitar"
                 ],
                 [
                     "4/4 120bpm 320kbps 48khz, 90s rock song with electric guitar and heavy drums",
                     None,
-                    "medium"
+                    "medium", 
+                    "90s Rock Guitar"
                 ],
                 [
                     "4/4 120bpm 320kbps 48khz, a light and cheerly EDM track, with syncopated drums, aery pads, and strong emotions",
                     "./assets/bach.mp3",
-                    "melody"
+                    "melody",
+                    "EDM my Bach"
                 ],
                 [
                     "4/4 320kbps 48khz, lofi slow bpm electro chill with organic samples",
                     None,
-                    "medium",
+                    "medium", 
+                    "LoFi Chill"
                 ],
             ],
-            inputs=[text, melody_filepath, model],
+            inputs=[text, melody_filepath, model, title],
             outputs=[output]
         )
         gr.Markdown(
@@ -426,7 +443,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '--server_port',
         type=int,
-        default=7859,
+        default=7860,
         help='Port to run the server listener on',
     )
     parser.add_argument(
