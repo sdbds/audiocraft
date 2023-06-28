@@ -277,7 +277,7 @@ def ui(**kwargs):
     with gr.Blocks(title="UnlimitedMusicGen", css=css) as interface:
         gr.Markdown(
             """
-            # MusicGen
+            # Unlimited MusicGen
             This is your private demo for [MusicGen](https://github.com/facebookresearch/audiocraft), a simple and controllable model for music generation
 
             presented at: ["Simple and Controllable Music Generation"](https://huggingface.co/papers/2306.05284)
@@ -441,12 +441,6 @@ if __name__ == "__main__":
         '--password', type=str, default='', help='Password for authentication'
     )
     parser.add_argument(
-        '--inbrowser', action='store_true', help='Open in browser'
-    )
-    parser.add_argument(
-        '--share', action='store_true', help='Share the gradio UI'
-    )
-    parser.add_argument(
         '--server_port',
         type=int,
         default=7859,
@@ -457,6 +451,17 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         '--share', action='store_true', help='Share the gradio UI'
+    )
+    parser.add_argument(
+        '--unload_model', action='store_true', help='Unload the model after every generation to save GPU memory'
+    )
+
+    parser.add_argument(
+        '--unload_to_cpu', action='store_true', help='Move the model to main RAM after every generation to save GPU memory but reload faster than after full unload (see above)'
+    )
+
+    parser.add_argument(
+        '--cache', action='store_true', help='Cache models in RAM to quickly switch between them'
     )
 
     args = parser.parse_args()
