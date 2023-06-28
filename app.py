@@ -225,23 +225,26 @@ def predict(model, text, melody_filepath, duration, dimension, topk, topp, tempe
             
             output = output_segments[0]
             for i in range(1, len(output_segments)):
-                overlap_samples = overlap * MODEL.sample_rate
-                #stack tracks and fade out/in
-                overlapping_output_fadeout = output[:, :, -overlap_samples:]
-                #overlapping_output_fadeout = apply_fade(overlapping_output_fadeout,sample_rate=MODEL.sample_rate,duration=overlap,out=True,start=True, curve_end=0.0, current_device=MODEL.device)
-                overlapping_output_fadeout = apply_tafade(overlapping_output_fadeout,sample_rate=MODEL.sample_rate,duration=overlap,out=True,start=True,shape="linear")
+                if overlap > 0:
+                    overlap_samples = overlap * MODEL.sample_rate
+                    #stack tracks and fade out/in
+                    overlapping_output_fadeout = output[:, :, -overlap_samples:]
+                    #overlapping_output_fadeout = apply_fade(overlapping_output_fadeout,sample_rate=MODEL.sample_rate,duration=overlap,out=True,start=True, curve_end=0.0, current_device=MODEL.device)
+                    overlapping_output_fadeout = apply_tafade(overlapping_output_fadeout,sample_rate=MODEL.sample_rate,duration=overlap,out=True,start=True,shape="linear")
 
-                overlapping_output_fadein = output_segments[i][:, :, :overlap_samples]
-                #overlapping_output_fadein = apply_fade(overlapping_output_fadein,sample_rate=MODEL.sample_rate,duration=overlap,out=False,start=False, curve_start=0.0, current_device=MODEL.device)
-                overlapping_output_fadein = apply_tafade(overlapping_output_fadein,sample_rate=MODEL.sample_rate,duration=overlap,out=False,start=False, shape="linear")
+                    overlapping_output_fadein = output_segments[i][:, :, :overlap_samples]
+                    #overlapping_output_fadein = apply_fade(overlapping_output_fadein,sample_rate=MODEL.sample_rate,duration=overlap,out=False,start=False, curve_start=0.0, current_device=MODEL.device)
+                    overlapping_output_fadein = apply_tafade(overlapping_output_fadein,sample_rate=MODEL.sample_rate,duration=overlap,out=False,start=False, shape="linear")
 
-                overlapping_output = torch.cat([overlapping_output_fadeout[:, :, :-(overlap_samples // 2)], overlapping_output_fadein],dim=2)
-                print(f" overlap size Fade:{overlapping_output.size()}\n output: {output.size()}\n segment: {output_segments[i].size()}")
-                ##overlapping_output = torch.cat([output[:, :, -overlap_samples:], output_segments[i][:, :, :overlap_samples]], dim=1) #stack tracks
-                ##print(f" overlap size stack:{overlapping_output.size()}\n output: {output.size()}\n segment: {output_segments[i].size()}")
-                #overlapping_output = torch.cat([output[:, :, -overlap_samples:], output_segments[i][:, :, :overlap_samples]], dim=2) #stack tracks
-                #print(f" overlap size cat:{overlapping_output.size()}\n output: {output.size()}\n segment: {output_segments[i].size()}")               
-                output = torch.cat([output[:, :, :-overlap_samples], overlapping_output, output_segments[i][:, :, overlap_samples:]], dim=dimension)
+                    overlapping_output = torch.cat([overlapping_output_fadeout[:, :, :-(overlap_samples // 2)], overlapping_output_fadein],dim=2)
+                    print(f" overlap size Fade:{overlapping_output.size()}\n output: {output.size()}\n segment: {output_segments[i].size()}")
+                    ##overlapping_output = torch.cat([output[:, :, -overlap_samples:], output_segments[i][:, :, :overlap_samples]], dim=1) #stack tracks
+                    ##print(f" overlap size stack:{overlapping_output.size()}\n output: {output.size()}\n segment: {output_segments[i].size()}")
+                    #overlapping_output = torch.cat([output[:, :, -overlap_samples:], output_segments[i][:, :, :overlap_samples]], dim=2) #stack tracks
+                    #print(f" overlap size cat:{overlapping_output.size()}\n output: {output.size()}\n segment: {output_segments[i].size()}")               
+                    output = torch.cat([output[:, :, :-overlap_samples], overlapping_output, output_segments[i][:, :, overlap_samples:]], dim=dimension)
+                else:
+                    output = torch.cat([output, output_segments[i]], dim=dimension)
             output = output.detach().cpu().float()[0]
         except Exception as e:
             print(f"Error combining segments: {e}. Using the first segment only.")
@@ -323,12 +326,12 @@ def ui(**kwargs):
                         settings_font_color = gr.ColorPicker(label="Settings Font Color", value="#c87f05", interactive=True)
                 with gr.Accordion("Expert", open=False):
                     with gr.Row():
-                        overlap = gr.Slider(minimum=1, maximum=15, value=2, step=1, label="Verse Overlap", interactive=True)
+                        overlap = gr.Slider(minimum=0, maximum=15, value=2, step=1, label="Verse Overlap", interactive=True)
                         dimension = gr.Slider(minimum=-2, maximum=2, value=2, step=1, label="Dimension", info="determines which direction to add new segements of audio. (1 = stack tracks, 2 = lengthen, -2..0 = ?)", interactive=True)
                     with gr.Row():
                         topk = gr.Number(label="Top-k", value=280, precision=0, interactive=True)
-                        topp = gr.Number(label="Top-p", value=1450, precision=0, interactive=True)
-                        temperature = gr.Number(label="Randomness Temperature", value=0.75, precision=None, interactive=True)
+                        topp = gr.Number(label="Top-p", value=1150, precision=0, interactive=True)
+                        temperature = gr.Number(label="Randomness Temperature", value=0.7, precision=None, interactive=True)
                         cfg_coef = gr.Number(label="Classifier Free Guidance", value=8.5, precision=None, interactive=True)
                     with gr.Row():
                         seed = gr.Number(label="Seed", value=-1, precision=0, interactive=True)
