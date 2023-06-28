@@ -97,7 +97,7 @@ def load_melody_filepath(melody_filepath, title):
     #$Union[str, os.PathLike]    
     symbols = ['_', '.', '-']
     if (melody_filepath is None) or (melody_filepath == ""):
-        return title, gr.Slider.update(maximum=0, value=0) , gr.Radio.update(value="melody", interactive=True)   
+        return title, gr.update(maximum=0, value=0) , gr.update(value="melody", interactive=True)   
     
     if (title is None) or ("MusicGen" in title) or (title == ""):
         melody_name, melody_extension = get_filename_from_filepath(melody_filepath)
@@ -117,7 +117,7 @@ def load_melody_filepath(melody_filepath, title):
     print(f"Melody length: {len(melody_data)}, Melody segments: {total_melodys}\n")
     MAX_PROMPT_INDEX = total_melodys   
 
-    return  gr.Textbox.update(value=melody_name), gr.Slider.update(maximum=MAX_PROMPT_INDEX, value=0), gr.Radio.update(value="melody", interactive=False)
+    return  gr.Textbox.update(value=melody_name), gr.update(maximum=MAX_PROMPT_INDEX, value=0), gr.update(value="melody", interactive=False)
 
 def predict(model, text, melody_filepath, duration, dimension, topk, topp, temperature, cfg_coef, background, title, settings_font, settings_font_color, seed, overlap=1, prompt_index = 0, include_title = True, include_settings = True, harmony_only = False):
     global MODEL, INTERRUPTED, INTERRUPTING, MOVE_TO_CPU
@@ -305,11 +305,11 @@ def ui(**kwargs):
                     # Adapted from https://github.com/rkfg/audiocraft/blob/long/app.py, MIT license.
                     _ = gr.Button("Interrupt", elem_id="btn-interrupt").click(fn=interrupt, queue=False)
                 with gr.Row():
-                    with gr.Column():                        
-                        melody_filepath = gr.Audio(source="upload", type="filepath", label="Melody Condition (optional)", interactive=True, elem_id="melody-input")
-                        harmony_only = gr.Radio(label="Use Harmony Only",choices=["No", "Yes"], value="No", interactive=True, info="Remove Drums?")
                     with gr.Column():
                         radio = gr.Radio(["file", "mic"], value="file", label="Condition on a melody (optional) File or Mic")
+                        melody_filepath = gr.Audio(source="upload", type="filepath", label="Melody Condition (optional)", interactive=True, elem_id="melody-input")                        
+                    with gr.Column():
+                        harmony_only = gr.Radio(label="Use Harmony Only",choices=["No", "Yes"], value="No", interactive=True, info="Remove Drums?")
                         prompt_index = gr.Slider(label="Melody Condition Sample Segment", minimum=-1, maximum=MAX_PROMPT_INDEX, step=1, value=0, interactive=True, info="Which 30 second segment to condition with, - 1 condition each segment independantly")                                                
                 with gr.Accordion("Video", open=False):
                     with gr.Row():
@@ -340,7 +340,7 @@ def ui(**kwargs):
                 seed_used = gr.Number(label='Seed used', value=-1, interactive=False)
 
         radio.change(toggle_audio_src, radio, [melody_filepath], queue=False, show_progress=False)
-        melody_filepath.change(load_melody_filepath, inputs=[melody_filepath, title], outputs=[title, prompt_index , model], api_name="melody_filepath_change")
+        melody_filepath.change(load_melody_filepath, inputs=[melody_filepath, title], outputs=[title, prompt_index , model], api_name="melody_filepath_change", queue=False)
         reuse_seed.click(fn=lambda x: x, inputs=[seed_used], outputs=[seed], queue=False, api_name="reuse_seed")
         submit.click(predict, inputs=[model, text,melody_filepath, duration, dimension, topk, topp, temperature, cfg_coef, background, title, settings_font, settings_font_color, seed, overlap, prompt_index, include_title, include_settings, harmony_only], outputs=[output, wave_file, seed_used], api_name="submit")
         gr.Examples(
