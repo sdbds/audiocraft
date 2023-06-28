@@ -412,6 +412,38 @@ class MusicGen:
             gen_audio = self.compression_model.decode(gen_tokens, None)
         return gen_audio
 
+    #def _generate_tokens(self, attributes: tp.List[ConditioningAttributes],
+    #                     prompt_tokens: tp.Optional[torch.Tensor], progress: bool = False) -> torch.Tensor:
+    #    """Generate discrete audio tokens given audio prompt and/or conditions.
+
+    #    Args:
+    #        attributes (tp.List[ConditioningAttributes]): Conditions used for generation (text/melody).
+    #        prompt_tokens (tp.Optional[torch.Tensor]): Audio prompt used for continuation.
+    #        progress (bool, optional): Flag to display progress of the generation process. Defaults to False.
+    #    Returns:
+    #        torch.Tensor: Generated audio, of shape [B, C, T], T is defined by the generation params.
+    #    """
+    #    def _progress_callback(generated_tokens: int, tokens_to_generate: int):
+    #        print(f'{generated_tokens: 6d} / {tokens_to_generate: 6d}', end='\r')
+
+    #    if prompt_tokens is not None:
+    #        assert self.generation_params['max_gen_len'] > prompt_tokens.shape[-1], \
+    #            "Prompt is longer than audio to generate"
+
+    #    callback = None
+    #    if progress:
+    #        callback = _progress_callback
+
+    #    # generate by sampling from LM
+    #    with self.autocast:
+    #        gen_tokens = self.lm.generate(prompt_tokens, attributes, callback=callback, **self.generation_params)
+
+    #    # generate audio
+    #    assert gen_tokens.dim() == 3
+    #    with torch.no_grad():
+    #        gen_audio = self.compression_model.decode(gen_tokens, None)
+    #    return gen_audio
+
     def to(self, device: str):
         self.compression_model.to(device)
         self.lm.to(device)
