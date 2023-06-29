@@ -60,6 +60,7 @@ def generate_music_segments(text, melody, seed, MODEL, duration:int=10, overlap:
     prompt_segment = None
     # prevent hacking
     duration = min(duration, 720)
+    overlap =  min(overlap, 15)
     
     # Calculate the total number of segments
     total_segments = max(math.ceil(duration / segment_duration),1)
