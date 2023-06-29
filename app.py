@@ -301,7 +301,7 @@ def ui(**kwargs):
                 with gr.Row():
                     text = gr.Text(label="Describe your music", interactive=True, value="4/4 100bpm 320kbps 48khz, Industrial/Electronic Soundtrack, Dark, Intense, Sci-Fi")
                     with gr.Column():                        
-                        duration = gr.Slider(minimum=1, maximum=720, value=10, label="Duration", interactive=True)
+                        duration = gr.Slider(minimum=1, maximum=720, value=10, label="Duration (s)", interactive=True)
                         model = gr.Radio(["melody", "medium", "small", "large"], label="AI Model", value="melody", interactive=True)
                 with gr.Row():
                     submit = gr.Button("Generate", elem_id="btn-generate")
