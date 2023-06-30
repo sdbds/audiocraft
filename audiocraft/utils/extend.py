@@ -73,12 +73,14 @@ def generate_music_segments(text, melody, seed, MODEL, duration:int=10, overlap:
     while excess_duration + duration_loss > segment_duration:
         total_segments += 1
         #calculate duration loss from segment overlap
-        duration_loss = max(total_segments - 1,0) * math.ceil(overlap / 2)
+        duration_loss += math.ceil(overlap / 2)
         #calc excess duration
         excess_duration = segment_duration - (total_segments * segment_duration - duration)
         print(f"total Segments to Generate: {total_segments} for {duration} seconds. Each segment is {segment_duration} seconds. Excess {excess_duration} Overlap Loss {duration_loss}")
         if excess_duration + duration_loss > segment_duration:
             duration += duration_loss
+            duration_loss = 0
+    total_segments = min(total_segments, (720 // segment_duration))
 
     # If melody_segments is shorter than total_segments, repeat the segments until the total_segments is reached
     if len(melody_segments) < total_segments:
