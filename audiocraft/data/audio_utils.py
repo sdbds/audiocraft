@@ -263,3 +263,31 @@ def apply_fade(audio: torch.Tensor, sample_rate, duration=3.0, out=True, start=T
     wav = normalize_loudness(audio_faded,sample_rate, loudness_headroom_db=18, loudness_compressor=True)
     _clip_wav(wav, log_clipping=False, stem_name=stem_name)
     return wav
+
+def apply_splice_effect(waveform1, sample_rate1, waveform2, sample_rate2, overlap):
+    # Convert sample rates to integers
+    sample_rate1 = int(sample_rate1)
+    sample_rate2 = int(sample_rate2)
+
+    # Convert tensors to mono-channel if needed
+    if waveform1.ndim > 2:
+        waveform1 = waveform1.mean(dim=1)
+    if waveform2.ndim > 2:
+        waveform2 = waveform2.mean(dim=1)
+
+    ## Convert tensors to numpy arrays
+    #waveform1_np = waveform1.numpy()
+    #waveform2_np = waveform2.numpy()
+
+    # Apply splice effect using torchaudio.sox_effects.apply_effects_tensor
+    effects = [
+        ["splice", f"-q {waveform1},{overlap}"],
+    ]
+    output_waveform, output_sample_rate = torchaudio.sox_effects.apply_effects_tensor(
+        torch.cat([waveform1.unsqueeze(0), waveform2.unsqueeze(0)], dim=2),
+        sample_rate1,
+        effects
+    )
+
+    return output_waveform.squeeze(0), output_sample_rate
+

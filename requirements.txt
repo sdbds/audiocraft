@@ -17,5 +17,5 @@ transformers
 xformers
 demucs
 librosa
-gradio
+gradio>=3.37.0
 pillow
