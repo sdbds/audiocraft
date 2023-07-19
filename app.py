@@ -11,7 +11,9 @@ import argparse
 import torch
 import gradio as gr
 import os
+from pathlib import Path
 import time
+import typing as tp
 import warnings
 from audiocraft.models import MusicGen
 from audiocraft.data.audio import audio_write
@@ -37,6 +39,28 @@ def interrupt_callback():
 def interrupt():
     global INTERRUPTING
     INTERRUPTING = True
+
+class FileCleaner:
+    def __init__(self, file_lifetime: float = 3600):
+        self.file_lifetime = file_lifetime
+        self.files = []
+
+    def add(self, path: tp.Union[str, Path]):
+        self._cleanup()
+        self.files.append((time.time(), Path(path)))
+
+    def _cleanup(self):
+        now = time.time()
+        for time_added, path in list(self.files):
+            if now - time_added > self.file_lifetime:
+                if path.exists():
+                    path.unlink()
+                self.files.pop(0)
+            else:
+                break
+
+
+#file_cleaner = FileCleaner()
 
 def toggle_audio_src(choice):
     if choice == "mic":
