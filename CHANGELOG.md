@@ -1,8 +1,11 @@
-# Changelog
+## [0.0.2a2] - 2023-07-20
 
-All notable changes to this project will be documented in this file.
+Music Generation set to a max of 720 seconds (12 minutes) to avoid memory issues.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+Video editing options (thanks @Surn and @oncorporation).
+
+Music Conditioning segment options
+
 
 ## [0.0.2a] - TBD
 
@@ -13,6 +16,18 @@ Now repeating the conditioning periodically if it is too short.
 
 More options when launching Gradio app locally (thanks @ashleykleynhans).
 
+Testing out PyTorch 2.0 memory efficient attention.
+
+Added extended generation (infinite length) by slowly moving the windows.
+Note that other implementations exist: https://github.com/camenduru/MusicGen-colab.
+
 ## [0.0.1] - 2023-06-09
 
 Initial release, with model evaluation only.
+
+
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).

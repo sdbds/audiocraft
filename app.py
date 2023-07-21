@@ -11,6 +11,8 @@ import argparse
 import torch
 import gradio as gr
 import os
+import subprocess
+import sys
 from pathlib import Path
 import time
 import typing as tp
@@ -27,11 +29,12 @@ import librosa
 
 MODEL = None
 MODELS = None
-IS_SHARED_SPACE = "musicgen/MusicGen" in os.environ.get('SPACE_ID', '')
+IS_SHARED_SPACE = "Surn/UnlimitedMusicGen" in os.environ.get('SPACE_ID', '')
 INTERRUPTED = False
 UNLOAD_MODEL = False
 MOVE_TO_CPU = False
 MAX_PROMPT_INDEX = 0
+git = os.environ.get('GIT', "git")
 
 def interrupt_callback():
     return INTERRUPTED
@@ -115,6 +118,48 @@ def get_melody(melody_filepath):
         audio_data[0], audio_data[1] = audio_data[1], audio_data[0]
         melody = tuple(audio_data)
         return melody
+
+
+def commit_hash():
+    try:
+        return subprocess.check_output([git, "rev-parse", "HEAD"], shell=False, encoding='utf8').strip()
+    except Exception:
+        return "<none>"
+
+    
+def git_tag():
+    try:
+        return subprocess.check_output([git, "describe", "--tags"], shell=False, encoding='utf8').strip()
+    except Exception:
+        try:
+            from pathlib import Path
+            changelog_md = Path(__file__).parent.parent / "CHANGELOG.md"
+            with changelog_md.open(encoding="utf-8") as file:
+                return next((line.strip() for line in file if line.strip()), "<none>")
+        except Exception:
+            return "<none>"
+
+def versions_html():
+    import torch
+
+    python_version = ".".join([str(x) for x in sys.version_info[0:3]])
+    commit = commit_hash()
+    #tag = git_tag()
+
+    import xformers
+    xformers_version = xformers.__version__
+
+    return f"""
+        version: <a href="https://github.com/Oncorporation/audiocraft/commit/{"" if commit == "<none>" else commit}" target="_blank">{"click" if commit == "<none>" else commit}</a>
+        &#x2000;•&#x2000;
+        python: <span title="{sys.version}">{python_version}</span>
+        &#x2000;•&#x2000;
+        torch: {getattr(torch, '__long_version__',torch.__version__)}
+        &#x2000;•&#x2000;
+        xformers: {xformers_version}
+        &#x2000;•&#x2000;
+        gradio: {gr.__version__}
+        """
 
 def load_melody_filepath(melody_filepath, title):
     # get melody filename
@@ -301,6 +346,8 @@ def ui(**kwargs):
     #btn-generate {background-image:linear-gradient(to right bottom, rgb(157, 255, 157), rgb(229, 255, 235));}
     #btn-generate:hover {background-image:linear-gradient(to right bottom, rgb(229, 255, 229), rgb(255, 255, 255));}
     #btn-generate:active {background-image:linear-gradient(to right bottom, rgb(229, 255, 235), rgb(157, 255, 157));}
+    #versions {margin-top: 1em; width:100%; text-align:center;}
+    .small-btn {max-width:75px;}
     """
     with gr.Blocks(title="UnlimitedMusicGen", css=css) as interface:
         gr.Markdown(
@@ -346,7 +393,7 @@ def ui(**kwargs):
                             include_title = gr.Checkbox(label="Add Title", value=True, interactive=True)
                             include_settings = gr.Checkbox(label="Add Settings to background", value=True, interactive=True)
                     with gr.Row():
-                        title = gr.Textbox(label="Title", value="MusicGen", interactive=True)
+                        title = gr.Textbox(label="Title", value="UnlimitedMusicGen", interactive=True)
                         settings_font = gr.Text(label="Settings Font", value="./assets/arial.ttf", interactive=True)
                         settings_font_color = gr.ColorPicker(label="Settings Font Color", value="#c87f05", interactive=True)
                 with gr.Accordion("Expert", open=False):
@@ -360,8 +407,8 @@ def ui(**kwargs):
                         cfg_coef = gr.Number(label="Classifier Free Guidance", value=8.5, precision=None, interactive=True)
                     with gr.Row():
                         seed = gr.Number(label="Seed", value=-1, precision=0, interactive=True)
-                        gr.Button('\U0001f3b2\ufe0f').style(full_width=False).click(fn=lambda: -1, outputs=[seed], queue=False)
-                        reuse_seed = gr.Button('\u267b\ufe0f').style(full_width=False)
+                        gr.Button('\U0001f3b2\ufe0f', elem_classes="small-btn").click(fn=lambda: -1, outputs=[seed], queue=False)
+                        reuse_seed = gr.Button('\u267b\ufe0f', elem_classes="small-btn")
             with gr.Column() as c:
                 output = gr.Video(label="Generated Music")
                 wave_file = gr.File(label=".wav file", elem_id="output_wavefile", interactive=True)
@@ -429,7 +476,7 @@ def ui(**kwargs):
             for more details.
             """
         )
-
+        gr.HTML(value=versions_html(), visible=True, elem_id="versions")
         # Show the interface
         launch_kwargs = {}
         username = kwargs.get('username')
