@@ -265,14 +265,14 @@ def predict(model, text, melody_filepath, duration, dimension, topk, topp, tempe
                     descriptions=[text],
                     melody_wavs=melody,
                     melody_sample_rate=sr,
-                    progress=True
+                    progress=False
                 )
             # All output_segments are populated, so we can break the loop or set duration to 0
             break
         else:
             #output = MODEL.generate(descriptions=[text], progress=False)
             if not output_segments:
-                next_segment = MODEL.generate(descriptions=[text], progress=True)
+                next_segment = MODEL.generate(descriptions=[text], progress=False)
                 duration -= segment_duration
             else:
                 last_chunk = output_segments[-1][:, :, -overlap*MODEL.sample_rate:]
