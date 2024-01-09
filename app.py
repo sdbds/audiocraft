@@ -35,6 +35,8 @@ UNLOAD_MODEL = False
 MOVE_TO_CPU = False
 MAX_PROMPT_INDEX = 0
 git = os.environ.get('GIT', "git")
+s.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
+#s.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 def interrupt_callback():
     return INTERRUPTED
@@ -166,7 +168,7 @@ def load_melody_filepath(melody_filepath, title):
     #$Union[str, os.PathLike]    
     symbols = ['_', '.', '-']
     if (melody_filepath is None) or (melody_filepath == ""):
-        return title, gr.update(maximum=0, value=0) , gr.update(value="melody", interactive=True)   
+        return title, gr.update(maximum=0, value=0) , gr.update(value="melody-large", interactive=True)   
     
     if (title is None) or ("MusicGen" in title) or (title == ""):
         melody_name, melody_extension = get_filename_from_filepath(melody_filepath)
@@ -186,7 +188,7 @@ def load_melody_filepath(melody_filepath, title):
     print(f"Melody length: {len(melody_data)}, Melody segments: {total_melodys}\n")
     MAX_PROMPT_INDEX = total_melodys   
 
-    return  gr.Textbox.update(value=melody_name), gr.update(maximum=MAX_PROMPT_INDEX, value=0), gr.update(value="melody", interactive=False)
+    return  gr.Textbox.update(value=melody_name), gr.update(maximum=MAX_PROMPT_INDEX, value=0), gr.update(value="melody-large", interactive=True)
 
 def predict(model, text, melody_filepath, duration, dimension, topk, topp, temperature, cfg_coef, background, title, settings_font, settings_font_color, seed, overlap=1, prompt_index = 0, include_title = True, include_settings = True, harmony_only = False):
     global MODEL, INTERRUPTED, INTERRUPTING, MOVE_TO_CPU
@@ -374,7 +376,7 @@ def ui(**kwargs):
                     text = gr.Text(label="Describe your music", interactive=True, value="4/4 100bpm 320kbps 48khz, Industrial/Electronic Soundtrack, Dark, Intense, Sci-Fi")
                     with gr.Column():                        
                         duration = gr.Slider(minimum=1, maximum=720, value=10, label="Duration (s)", interactive=True)
-                        model = gr.Radio(["melody", "medium", "small", "large"], label="AI Model", value="melody", interactive=True)
+                        model = gr.Radio(["melody", "medium", "small", "large", "melody-large", "stereo-melody", "stereo-medium", "stereo-small", "stereo-large", "stereo-melody-large"], label="AI Model", value="melody-large", interactive=True)
                 with gr.Row():
                     submit = gr.Button("Generate", elem_id="btn-generate")
                     # Adapted from https://github.com/rkfg/audiocraft/blob/long/app.py, MIT license.
@@ -462,13 +464,19 @@ def ui(**kwargs):
             The model will generate a short music extract based on the description you provided.
             You can generate up to 30 seconds of audio.
 
-            We present 4 model variations:
+            We present 10 model variations:
             1. Melody -- a music generation model capable of generating music condition on text and melody inputs. **Note**, you can also use text only.
             2. Small -- a 300M transformer decoder conditioned on text only.
             3. Medium -- a 1.5B transformer decoder conditioned on text only.
             4. Large -- a 3.3B transformer decoder conditioned on text only (might OOM for the longest sequences.)
+            5. Melody Large -- a 3.3B, text to music, and text+melody to music
+            6. Stereo Melody -- a 3.3B, text to music, and text+melody to music, with stereo output
+            7. Stereo Medium -- a 1.5B transformer decoder conditioned on text only, with stereo output
+            8. Stereo Small -- a 300M transformer decoder conditioned on text only, with stereo output
+            9. Stereo Large -- a 3.3B transformer decoder conditioned on text only (might OOM for the longest sequences.), with stereo output
+            10. Stereo Melody Large -- a 3.3B, text to music, and text+melody to music, with stereo output
 
-            When using `melody`, ou can optionaly provide a reference audio from
+            When using a `melody`, you can optionaly provide a reference audio from
             which a broad melody will be extracted. The model will then try to follow both the description and melody provided.
 
             You can also use your own GPU or a Google Colab by following the instructions on our repo.

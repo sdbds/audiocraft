@@ -69,11 +69,17 @@ These parameters, such as top-k, top-p, temperature, and classifier-free guidanc
 
 ## API
 
-We provide a simple API and 4 pre-trained models. The pre trained models are:
+We provide a simple API and 10 pre-trained models. The pre trained models are:
 - `small`: 300M model, text to music only - [🤗 Hub](https://huggingface.co/facebook/musicgen-small)
 - `medium`: 1.5B model, text to music only - [🤗 Hub](https://huggingface.co/facebook/musicgen-medium)
 - `melody`: 1.5B model, text to music and text+melody to music - [🤗 Hub](https://huggingface.co/facebook/musicgen-melody)
 - `large`: 3.3B model, text to music only - [🤗 Hub](https://huggingface.co/facebook/musicgen-large)
+- `melody large` (3.3B), text to music, and text+melody to music # see: [🤗 Hub](https://huggingface.co/facebook/musicgen-melody-large)
+- `small stereo` (300M), text to music, # see: [🤗 Hub](https://huggingface.co/facebook/musicgen-small)
+- `medium stereo` (1.5B), text to music, # see: [🤗 Hub](https://huggingface.co/facebook/musicgen-stereo-medium)
+- `melody stereo` (1.5B) text to music and text+melody to music, # see: [🤗 Hub](https://huggingface.co/facebook/musicgen-stereo-melody)
+- `large stereo` (3.3B), text to music, # see: [🤗 Hub](https://huggingface.co/facebook/musicgen-stereo-large)
+- `melody large stereo` (3.3B), text to music, and text+melody to music # see: [🤗 Hub](https://huggingface.co/facebook/musicgen-stereo-melody-large)
 
 We observe the best trade-off between quality and compute with the `medium` or `melody` model.
 In order to use MusicGen locally **you must have a GPU**. We recommend 16GB of memory, but smaller
