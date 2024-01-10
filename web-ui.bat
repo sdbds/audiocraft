@@ -1,1 +1,2 @@
 py -m app
+pause

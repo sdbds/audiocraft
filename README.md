@@ -31,16 +31,18 @@ Check out our [sample page][musicgen_samples] or test the available demo!
 We use 20K hours of licensed music to train MusicGen. Specifically, we rely on an internal dataset of 10K high-quality music tracks, and on the ShutterStock and Pond5 music data.
 
 ## Installation
-Audiocraft requires Python 3.9, PyTorch 2.0.0, and a GPU with at least 16 GB of memory (for the medium-sized model). To install Audiocraft, you can run the following:
+Audiocraft requires Python 3.9, PyTorch 2.1.0, and a GPU with at least 16 GB of memory (for the medium-sized model). To install AudioCraft, you can run the following:
 
 ```shell
 # Best to make sure you have torch installed first, in particular before installing xformers.
 # Don't run this if you already have PyTorch installed.
-pip install 'torch>=2.0'
+python -m pip install 'torch==2.1.0'
+# You might need the following before trying to install the packages
+python -m pip install setuptools wheel
 # Then proceed to one of the following
-pip install -U audiocraft  # stable release
-pip install -U git+https://git@github.com/facebookresearch/audiocraft#egg=audiocraft  # bleeding edge
-pip install -e .  # or if you cloned the repo locally
+python -m pip install -U audiocraft  # stable release
+python -m pip install -U git+https://git@github.com/facebookresearch/audiocraft#egg=audiocraft  # bleeding edge
+python -m pip install -e .  # or if you cloned the repo locally (mandatory if you want to train).
 ```
 
 ## Usage

@@ -35,7 +35,7 @@ UNLOAD_MODEL = False
 MOVE_TO_CPU = False
 MAX_PROMPT_INDEX = 0
 git = os.environ.get('GIT', "git")
-s.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
 #s.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 def interrupt_callback():
