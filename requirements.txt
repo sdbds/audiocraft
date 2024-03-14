@@ -8,18 +8,21 @@ julius
 num2words
 numpy
 sentencepiece
-spacy==3.5.2
-torch==2.0.1
-torchaudio==2.0.2
+spacy>=3.6.1
+torch>=2.1.0
+torchaudio>=2.1.0
 soundfile
 huggingface_hub
 tqdm
-transformers>=4.31.0
-xformers>=0.0.22
+transformers>=4.31.0  # need Encodec there.
+xformers>=0.0.23
 demucs
 librosa
 gradio==3.38.00
 pillow
+torchmetrics
+encodec
+protobuf==3.20.1
 filetype
 wave
 mutagen

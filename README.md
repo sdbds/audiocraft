@@ -1,4 +1,3 @@
-<<<<<<< Updated upstream
 [arxiv]: https://arxiv.org/abs/2306.05284
 [musicgen_samples]: https://ai.honu.io/papers/musicgen/
 Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
@@ -435,5 +434,5 @@ Check [@camenduru tutorial on Youtube](https://www.youtube.com/watch?v=EGfxuTy9E
 * The code in this repository is released under the MIT license as found in the [LICENSE file](LICENSE).
 * The weights in this repository are released under the CC-BY-NC 4.0 license as found in the [LICENSE_weights file](LICENSE_weights).
 [arxiv]: https://arxiv.org/abs/2306.05284
->>>>>>> Stashed changes
+
 [musicgen_samples]: https://ai.honu.io/papers/musicgen/
